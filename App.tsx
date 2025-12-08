@@ -3,8 +3,9 @@ import { ImageUploader } from './components/ImageUploader';
 import { Canvas } from './components/Canvas';
 import { extractObjectFromImage } from './services/geminiService';
 import { applyMask, analyzeImageContent, loadImage, calculateInitialSize } from './utils/imageUtils';
+import { saveProject, loadProject } from './utils/projectUtils';
 import { CollageItem, AppState } from './types';
-import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon } from './components/Icons';
+import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon, FolderIcon, SaveDiskIcon } from './components/Icons';
 import { Logo } from './components/Logo';
 import html2canvas from 'html2canvas';
 import confetti from 'canvas-confetti';
@@ -23,6 +24,7 @@ const App: React.FC = () => {
   const exportContainerRef = useRef<HTMLDivElement>(null);
   const draggingItemRef = useRef<number | null>(null);
   const dragOverItemRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -249,6 +251,24 @@ const App: React.FC = () => {
     }, 100);
   };
 
+  const handleSaveProject = () => {
+    saveProject(state);
+  };
+
+  const handleLoadProject = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      try {
+        const loadedState = await loadProject(e.target.files[0]);
+        setState(loadedState);
+        // Clear input
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (error) {
+        alert("Failed to load project file.");
+        console.error(error);
+      }
+    }
+  };
+
   const selectedItem = state.items.find(i => i.id === state.selectedItemId);
 
   if (apiKeyLoading) {
@@ -288,11 +308,38 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden relative">
       <aside className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
-        <div className="p-6 border-b border-slate-800">
+        {/* Sidebar Header with Logo and Project Controls */}
+        <div className="p-6 border-b border-slate-800 flex flex-col gap-4">
            <Logo />
-           <p className="text-xs text-slate-500 mt-3 font-medium tracking-wide">
-             Based on a true story 😉
-           </p>
+           <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-500 font-medium tracking-wide">
+                Based on a true story 😉
+              </p>
+              
+              <div className="flex gap-2">
+                 <input 
+                    type="file" 
+                    accept=".json" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={handleLoadProject} 
+                 />
+                 <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                    title="Load Project"
+                 >
+                    <FolderIcon />
+                 </button>
+                 <button 
+                    onClick={handleSaveProject}
+                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                    title="Save Project"
+                 >
+                    <SaveDiskIcon />
+                 </button>
+              </div>
+           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
