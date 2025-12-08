@@ -1,11 +1,12 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { Canvas } from './components/Canvas';
 import { extractObjectFromImage } from './services/geminiService';
 import { applyMask, analyzeImageContent, loadImage, calculateInitialSize } from './utils/imageUtils';
 import { saveProject, loadProject } from './utils/projectUtils';
-import { CollageItem, AppState } from './types';
-import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon, FolderIcon, SaveDiskIcon } from './components/Icons';
+import { CollageItem, AppState, LayerStyle } from './types';
+import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon, FolderIcon, SaveDiskIcon, StyleIcon } from './components/Icons';
 import { Logo } from './components/Logo';
 import html2canvas from 'html2canvas';
 import confetti from 'canvas-confetti';
@@ -129,6 +130,7 @@ const App: React.FC = () => {
       showCutout: true, 
       invertMask: false,
       isMirrored: false,
+      style: 'normal',
       isProcessing: true,
       position: { x: 50 + state.items.length * 20, y: 50 + state.items.length * 20 },
       size: { width: initialWidth, height: initialHeight },
@@ -269,6 +271,14 @@ const App: React.FC = () => {
     }
   };
 
+  const styles: { id: LayerStyle; label: string; }[] = [
+    { id: 'normal', label: 'Normal' },
+    { id: 'sticker', label: 'Sticker' },
+    { id: 'ghost', label: 'Ghost' },
+    { id: 'ink', label: 'Ink' },
+    { id: 'retro', label: 'Retro' },
+  ];
+
   const selectedItem = state.items.find(i => i.id === state.selectedItemId);
 
   if (apiKeyLoading) {
@@ -387,19 +397,31 @@ const App: React.FC = () => {
                       <span className="text-xs text-amber-400 font-mono font-bold">{selectedItem.name}</span>
                   </div>
                   
-                  {/* Unmasked Thumbnail */}
-                  <div className="flex gap-4 mb-4 items-start">
-                      <div className="h-16 w-16 rounded bg-slate-900 border border-slate-700 overflow-hidden flex items-center justify-center flex-shrink-0">
-                        <img src={selectedItem.originalSrc} alt="Source" className="h-full object-contain opacity-80" />
-                      </div>
-                      <div className="text-[10px] text-slate-500 leading-relaxed">
-                        Original source image.<br/>
-                        Use canvas handles to crop/resize.
-                      </div>
+                  {/* Style Selector */}
+                  <div className="mb-4">
+                     <label className="text-[10px] text-slate-500 font-bold uppercase mb-2 block flex items-center gap-1">
+                        <StyleIcon /> Layer Style
+                     </label>
+                     <div className="grid grid-cols-3 gap-1">
+                        {styles.map(s => (
+                            <button
+                                key={s.id}
+                                onClick={() => updateItem(selectedItem.id, { style: s.id })}
+                                className={`text-[10px] py-1.5 px-1 rounded font-medium border transition-all
+                                   ${selectedItem.style === s.id 
+                                     ? 'bg-orange-500/20 border-orange-500 text-orange-200' 
+                                     : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-700'
+                                   }
+                                `}
+                            >
+                                {s.label}
+                            </button>
+                        ))}
+                     </div>
                   </div>
     
                   {/* Action Buttons */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-700">
                         <button
                             onClick={() => updateItem(selectedItem.id, { isMirrored: !selectedItem.isMirrored })}
                             className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border ${selectedItem.isMirrored ? 'bg-slate-700 border-orange-500/50 text-orange-400' : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-200'}`}
@@ -477,7 +499,12 @@ const App: React.FC = () => {
                         )}
                     </div>
                     <div className="ml-3 overflow-hidden flex-1">
-                        <p className={`text-sm font-medium truncate capitalize ${state.selectedItemId === item.id ? 'text-orange-200' : 'text-slate-300'}`}>{item.name}</p>
+                        <div className="flex justify-between items-center">
+                            <p className={`text-sm font-medium truncate capitalize ${state.selectedItemId === item.id ? 'text-orange-200' : 'text-slate-300'}`}>{item.name}</p>
+                            {item.style !== 'normal' && (
+                                <span className="text-[8px] bg-slate-700 px-1 rounded uppercase text-slate-400">{item.style}</span>
+                            )}
+                        </div>
                         <p className="text-[10px] text-slate-500">{item.isProcessing ? 'Processing...' : 'Ready'}</p>
                     </div>
                   </div>

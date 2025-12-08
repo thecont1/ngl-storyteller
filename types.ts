@@ -1,3 +1,4 @@
+
 export interface Position {
   x: number;
   y: number;
@@ -15,6 +16,8 @@ export interface Crop {
   right: number;  // percentage 0-100
 }
 
+export type LayerStyle = 'normal' | 'sticker' | 'ghost' | 'ink' | 'retro';
+
 export interface CollageItem {
   id: string;
   originalSrc: string; // The raw uploaded image
@@ -24,6 +27,7 @@ export interface CollageItem {
   showCutout: boolean; // Toggle: True = Show processed (cutout), False = Show original
   invertMask: boolean; // Toggle state for mask inversion
   isMirrored: boolean; // Toggle state for horizontal flip
+  style: LayerStyle;   // The visual style applied to the layer
   
   isProcessing: boolean;
   position: Position;
