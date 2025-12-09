@@ -255,7 +255,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Generate dynamic inline styles for the Sticker effect
   const generateStickerStyle = (item: CollageItem) => {
     if (item.style !== 'sticker') return {};
-    const thickness = Math.max(3, Math.round(item.size.width * 0.003));
+    const thickness = Math.max(3, Math.round(item.size.width * 0.002));
     
     return {
         filter: `

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 /**
@@ -10,6 +11,7 @@ export const extractObjectFromImage = async (base64Image: string): Promise<strin
     const base64Data = base64Image.split(',')[1];
     const mimeType = base64Image.substring(base64Image.indexOf(':') + 1, base64Image.indexOf(';'));
 
+    // Switch to flash-image for higher availability and speed
     const model = 'gemini-3-pro-image-preview';
 
     const response = await ai.models.generateContent({

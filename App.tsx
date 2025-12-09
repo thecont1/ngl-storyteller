@@ -3,13 +3,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { Canvas } from './components/Canvas';
 import { extractObjectFromImage } from './services/geminiService';
-import { applyMask, analyzeImageContent, loadImage, calculateInitialSize } from './utils/imageUtils';
-import { saveProject, loadProject } from './utils/projectUtils';
+import { applyMask, analyzeImageContent, loadImage, calculateInitialSize, fileToBase64 } from './utils/imageUtils';
+import { saveProject, loadProject, saveProjectNGL } from './utils/projectUtils';
 import { CollageItem, AppState, LayerStyle } from './types';
-import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon, StyleIcon, ScissorsIcon, GeminiIcon, SaveDiskIcon, FileImageIcon, FileCodeIcon } from './components/Icons';
+import { TrashIcon, InvertIcon, MirrorIcon, GripVerticalIcon, StyleIcon, ScissorsIcon, GeminiIcon, SaveDiskIcon, FileImageIcon, FileCodeIcon, FileJsonIcon } from './components/Icons';
 import { Logo } from './components/Logo';
 import html2canvas from 'html2canvas';
-import confetti from 'canvas-confetti';
 
 const App: React.FC = () => {
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
@@ -286,13 +285,6 @@ const App: React.FC = () => {
     setIsSaveModalOpen(false);
     if (!exportContainerRef.current) return;
     
-    confetti({
-      particleCount: 150,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#f97316', '#fbbf24', '#ffffff']
-    });
-
     selectItem(null);
     setTimeout(async () => {
         try {
@@ -345,6 +337,8 @@ const App: React.FC = () => {
             link.download = filename;
             link.href = canvas.toDataURL('image/jpeg', 0.9);
             link.click();
+            
+            showToast("Image downloaded successfully!");
         } catch (e) {
             console.error("Export failed", e);
             showToast("Could not export image.", true);
@@ -408,17 +402,53 @@ const App: React.FC = () => {
     }
   };
 
+  const executeSaveNGL = async () => {
+    setIsSaveModalOpen(false);
+    try {
+      if (!state.baseImage) {
+        showToast("Create a composition before saving.", true);
+        return;
+      }
+      
+      const savedFilename = await saveProjectNGL(state);
+      
+      if (state.filename !== savedFilename) {
+        setState(prev => ({ ...prev, filename: savedFilename }));
+      }
+      showToast("NGL data saved!");
+    } catch (e) {
+      console.error("Save failed", e);
+      showToast("Failed to save NGL data.", true);
+    }
+  };
+
   const handleFileDrop = async (e: React.DragEvent) => {
       e.preventDefault();
       if (e.dataTransfer.files && e.dataTransfer.files[0]) {
           const file = e.dataTransfer.files[0];
+          
+          // 1. Try loading as a Project file (Polyglot PNG or .ngl or .json)
           try {
             const loadedState = await loadProject(file);
             setState(loadedState);
             showToast("Project loaded successfully!");
+            return;
           } catch (error) {
-            console.error(error);
-            showToast("Failed to load project. Ensure this is a valid .ngl or .png project file.", true);
+            // Not a project file, ignore and continue to fallback
+          }
+
+          // 2. Fallback: Load as regular Base Image (Background)
+          if (file.type.startsWith('image/')) {
+             try {
+                const base64 = await fileToBase64(file);
+                handleBaseImageUpload(base64);
+                showToast("Scene image loaded.");
+             } catch (e) {
+                console.error(e);
+                showToast("Failed to load image.", true);
+             }
+          } else {
+             showToast("File type not supported. Please drop an image or project file.", true);
           }
       }
   };
@@ -473,19 +503,6 @@ const App: React.FC = () => {
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleFileDrop}
     >
-      
-      {/* Toast Notification */}
-      {notification && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-2xl font-medium animate-bounce-in flex items-center gap-2 ${
-          notification.isError 
-            ? 'bg-red-500 text-white border border-red-400' 
-            : 'bg-emerald-600 text-white border border-emerald-500'
-        }`}>
-          {notification.isError && <span className="text-lg">⚠️</span>}
-          {notification.message}
-        </div>
-      )}
-
       {/* Save Modal */}
       {isSaveModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -517,6 +534,19 @@ const App: React.FC = () => {
                           <div>
                               <h4 className="font-bold text-slate-200 group-hover:text-white">Download Image (.jpg)</h4>
                               <p className="text-xs text-slate-400 mt-1">Exports a flattened high-quality image for sharing on social media.</p>
+                          </div>
+                      </button>
+
+                      <button 
+                        onClick={executeSaveNGL}
+                        className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-orange-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left"
+                      >
+                          <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-orange-500/20 group-hover:text-orange-400 transition-colors">
+                            <FileJsonIcon />
+                          </div>
+                          <div>
+                              <h4 className="font-bold text-slate-200 group-hover:text-white">Save Raw Data (.ngl)</h4>
+                              <p className="text-xs text-slate-400 mt-1">Saves a compressed JSON file containing all project data.</p>
                           </div>
                       </button>
                   </div>
@@ -743,6 +773,19 @@ const App: React.FC = () => {
       </aside>
 
       <main className="flex-1 flex flex-col relative min-w-0 min-h-0">
+        
+        {/* Toast Notification - Moved inside Canvas Area */}
+        {notification && (
+          <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-2xl font-medium animate-toast-slide-up flex items-center gap-2 ${
+            notification.isError 
+              ? 'bg-red-500 text-white border border-red-400' 
+              : 'bg-emerald-600 text-white border border-emerald-500'
+          }`}>
+            {notification.isError && <span className="text-lg">⚠️</span>}
+            {notification.message}
+          </div>
+        )}
+
         {state.baseImage ? (
            <Canvas 
              baseImage={state.baseImage}
@@ -782,6 +825,15 @@ const App: React.FC = () => {
         }
         .animate-bounce-in {
           animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes toast-slide-up {
+          0% { transform: translate(-50%, 150%); opacity: 0; }
+          60% { transform: translate(-50%, -10%); opacity: 1; }
+          100% { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .animate-toast-slide-up {
+          animation: toast-slide-up 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
       `}</style>
     </div>

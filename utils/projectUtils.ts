@@ -3,16 +3,16 @@ import { AppState } from '../types';
 
 const SEPARATOR = "NGL_PROJECT_DATA_v1::";
 
-const generateFilename = (stateFilename?: string): string => {
-  // If we already have a filename, preserve the timestamp but ensure it ends in .png
+const generateFilename = (extension: string, stateFilename?: string): string => {
+  // If we already have a filename, preserve the timestamp but ensure it has the correct extension
   if (stateFilename) {
-      return stateFilename.replace(/\.(json|ngl|png)$/, '.png');
+      return stateFilename.replace(/\.(json|ngl|png)$/, extension);
   }
   const now = new Date();
   const pad = (n: number) => n.toString().padStart(2, '0');
   const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
   const timeStr = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-  return `nglstory-${dateStr}T${timeStr}.png`;
+  return `nglstory-${dateStr}T${timeStr}${extension}`;
 };
 
 /**
@@ -20,7 +20,7 @@ const generateFilename = (stateFilename?: string): string => {
  * The file is a valid PNG image (for Finder thumbnails) with the compressed project data appended to the end.
  */
 export const saveProject = async (state: AppState, imageBlob: Blob): Promise<string> => {
-  let filename = generateFilename(state.filename);
+  let filename = generateFilename('.png', state.filename);
 
   // 1. Prepare State Data
   const projectData = {
@@ -62,6 +62,45 @@ export const saveProject = async (state: AppState, imageBlob: Blob): Promise<str
 
   return filename;
 };
+
+/**
+ * Saves the project as a compressed NGL file (Gzipped JSON).
+ * Used for raw data transport or future viewer extensions.
+ */
+export const saveProjectNGL = async (state: AppState): Promise<string> => {
+  let filename = generateFilename('.ngl', state.filename);
+
+  const projectData = {
+    ...state,
+    filename,
+    version: '1.2',
+    timestamp: new Date().toISOString(),
+    thumbnail: undefined,
+    items: state.items.map(item => ({
+      ...item,
+      isProcessing: false
+    }))
+  };
+
+  const jsonString = JSON.stringify(projectData);
+  
+  // Compress using Gzip
+  const stream = new Blob([jsonString], { type: 'application/json' }).stream();
+  const compressedReadableStream = stream.pipeThrough(new CompressionStream('gzip'));
+  const compressedBlob = await new Response(compressedReadableStream).blob();
+
+  const url = URL.createObjectURL(compressedBlob);
+  
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  return filename;
+}
 
 /**
  * Loads a project. 
@@ -119,11 +158,15 @@ export const loadProject = async (file: File): Promise<AppState> => {
           }
 
       } else if (file.name.endsWith('.ngl')) {
-          // Legacy Compressed Format
+          // Compressed Format
           jsonString = await decompressBlob(file);
-      } else {
+      } else if (file.name.endsWith('.json')) {
           // Legacy Plaintext JSON
           jsonString = await file.text();
+      } else {
+          // Not a recognizable project file.
+          // Throw immediately so we don't try to JSON.parse binary data (like JPGs)
+          throw new Error("File format not recognized as project.");
       }
 
       // Parse and Validate
@@ -142,8 +185,9 @@ export const loadProject = async (file: File): Promise<AppState> => {
       };
 
   } catch (error) {
-    console.error("Load failed:", error);
-    // If we fail to load as project, we might bubble this up so the UI can treat it as a plain image import
+    // We suppress the console error here because it's normal for users to drop
+    // regular JPGs/PNGs, which triggers this error before falling back to the image loader.
+    // console.error("Load failed:", error);
     throw error;
   }
 };
