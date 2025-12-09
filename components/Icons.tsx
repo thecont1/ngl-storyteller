@@ -58,9 +58,9 @@ export const InvertIcon = () => (
 
 export const MirrorIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m18 8-4-4-4 4" />
-    <path d="M14 4v16" />
-    <path d="M6 20h12" />
+    <path d="M17 4v16l5-8-5-8z" />
+    <path d="M7 20V4l-5 8 5 8z" fill="currentColor" className="opacity-50" />
+    <line x1="12" y1="4" x2="12" y2="20" strokeDasharray="2 2" />
   </svg>
 );
 
@@ -101,5 +101,15 @@ export const StyleIcon = () => (
     <path d="M12 2.69l5.74 5.74-5.74 5.74L6.26 8.43z" />
     <path d="M18.5 12.55l-5.74 5.74-5.74-5.74" />
     <path d="M12 22v-3.71" />
+  </svg>
+);
+
+export const ScissorsIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <line x1="20" y1="4" x2="8.12" y2="15.88" />
+    <line x1="14.47" y1="14.48" x2="20" y2="20" />
+    <line x1="8.12" y1="8.12" x2="12" y2="12" />
   </svg>
 );

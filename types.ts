@@ -16,7 +16,7 @@ export interface Crop {
   right: number;  // percentage 0-100
 }
 
-export type LayerStyle = 'normal' | 'sticker' | 'ghost' | 'ink' | 'retro';
+export type LayerStyle = 'normal' | 'sticker' | 'ghost' | 'ink' | 'retro' | 'pumpkin';
 
 export interface CollageItem {
   id: string;

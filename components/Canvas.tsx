@@ -187,11 +187,11 @@ export const Canvas: React.FC<CanvasProps> = ({
         case 'sticker':
             return 'filter-sticker';
         case 'ghost':
-            return 'filter-ghost';
+            return 'filter-ghost mix-blend-screen opacity-80';
         case 'ink':
             return 'filter-ink mix-blend-multiply opacity-90';
-        case 'retro':
-            return 'filter-retro sepia contrast-125';
+        case 'pumpkin':
+            return 'filter-pumpkin sepia contrast-125';
         default:
             return '';
     }
@@ -262,7 +262,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 )}
                 
                 <img 
-                    src={item.processedSrc || item.originalSrc} 
+                    src={(item.showCutout && item.processedSrc) ? item.processedSrc : item.originalSrc} 
                     alt={item.name}
                     className={`w-full h-full object-contain select-none transition-opacity duration-700
                        ${item.isProcessing ? 'opacity-0' : 'opacity-100'}
@@ -347,7 +347,6 @@ export const Canvas: React.FC<CanvasProps> = ({
           50% { transform: translateY(-8px); }
         }
 
-        /* Simulating a sticker outline using drop-shadows. */
         .filter-sticker {
             filter: drop-shadow(0px -2px 0px white) 
                     drop-shadow(0px 2px 0px white) 
@@ -357,13 +356,12 @@ export const Canvas: React.FC<CanvasProps> = ({
         }
         
         .filter-ghost {
-            /* 
-               Grayscale+Sepia kills the original colors (fixing green artifacts).
-               Hue-rotate shifts Sepia (orange/brown) to Ghostly Blue/Cyan.
-               Saturate boosts the intensity.
-            */
             filter: grayscale(100%) sepia(100%) hue-rotate(190deg) saturate(300%) opacity(0.85) drop-shadow(0 0 8px rgba(150, 220, 255, 0.6));
             animation: float-ghost 3s ease-in-out infinite;
+        }
+
+        .filter-pumpkin {
+            filter: drop-shadow(0 0 10px rgba(100, 200, 255, 0.6)) brightness(1.2) hue-rotate(180deg);
         }
 
         .filter-ink {

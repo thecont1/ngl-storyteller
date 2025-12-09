@@ -6,7 +6,7 @@ import { extractObjectFromImage } from './services/geminiService';
 import { applyMask, analyzeImageContent, loadImage, calculateInitialSize } from './utils/imageUtils';
 import { saveProject, loadProject } from './utils/projectUtils';
 import { CollageItem, AppState, LayerStyle } from './types';
-import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon, FolderIcon, SaveDiskIcon, StyleIcon } from './components/Icons';
+import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon, FolderIcon, SaveDiskIcon, StyleIcon, ScissorsIcon } from './components/Icons';
 import { Logo } from './components/Logo';
 import html2canvas from 'html2canvas';
 import confetti from 'canvas-confetti';
@@ -14,6 +14,7 @@ import confetti from 'canvas-confetti';
 const App: React.FC = () => {
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
   const [apiKeyLoading, setApiKeyLoading] = useState<boolean>(true);
+  const [notification, setNotification] = useState<{message: string, isError: boolean} | null>(null);
 
   const [state, setState] = useState<AppState>({
     baseImage: null,
@@ -47,6 +48,20 @@ const App: React.FC = () => {
     checkKey();
   }, []);
 
+  // Clear notification after 4 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const showToast = (message: string, isError: boolean = false) => {
+    setNotification({ message, isError });
+  };
+
   const handleConnectApiKey = async () => {
     try {
       if (window.aistudio && window.aistudio.openSelectKey) {
@@ -55,7 +70,7 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Error selecting API key", e);
-      alert("Failed to select API key. Please try again.");
+      showToast("Failed to select API key. Please try again.", true);
     }
   };
 
@@ -94,7 +109,7 @@ const App: React.FC = () => {
         )
       }));
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Processing failed", error);
       setState(prev => ({
         ...prev,
@@ -104,7 +119,13 @@ const App: React.FC = () => {
             : item
         )
       }));
-      alert("Extraction failed. Please try again.");
+      
+      const errorMessage = error?.message || JSON.stringify(error);
+      if (errorMessage.includes('503') || errorMessage.includes('overloaded')) {
+         showToast("The AI model is currently overloaded. Please wait a moment and try again later.", true);
+      } else {
+         showToast("Extraction failed. Please check your connection or try again.", true);
+      }
     }
   };
 
@@ -250,7 +271,7 @@ const App: React.FC = () => {
             link.click();
         } catch (e) {
             console.error("Export failed", e);
-            alert("Could not export image.");
+            showToast("Could not export image.", true);
         }
     }, 100);
   };
@@ -258,7 +279,7 @@ const App: React.FC = () => {
   const handleSaveProject = async () => {
     try {
       if (!exportContainerRef.current || !state.baseImage) {
-        alert("Create a composition before saving.");
+        showToast("Create a composition before saving.", true);
         return;
       }
       
@@ -280,25 +301,43 @@ const App: React.FC = () => {
       if (ctx) {
         const w = canvas.width;
         const h = canvas.height;
+
         ctx.save();
-        ctx.translate(w / 2, h / 2);
-        ctx.rotate(-Math.PI / 6);
+
+        // 1) CHANGE THESE TWO FACTORS TO TEST POSITION
+        const posAlongDiagonal = 0.5; // 0 = bottom‑left, 1 = top‑right
+        const extraOffset = +0.15 * h; // shift perpendicular to the diagonal
+
+        // point along the diagonal from (0,h) → (w,0)
+        const x = posAlongDiagonal * w;
+        const y = h - posAlongDiagonal * h;
+
+        ctx.translate(x, y);
+
+        // 2) CHANGE THIS TO TEST ANGLE
+        const baseAngle = Math.atan2(-h, w);   // bottom‑left → top‑right
+        const extraRotation = 0;               // e.g. Math.PI * 0.02 for a small tweak
+        ctx.rotate(baseAngle + extraRotation);
+
+        // move text away from the exact center line if needed
+        ctx.translate(0, extraOffset);
+
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        
-        // Scale text based on canvas size
+
         const fontSize = Math.min(w, h) * 0.15;
         ctx.font = `900 ${fontSize}px 'Inter', sans-serif`;
-        
+
         ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.fillText('PROJECT FILE', 0, 0);
-        
+
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
         ctx.lineWidth = 2;
         ctx.strokeText('PROJECT FILE', 0, 0);
-        
+
         ctx.restore();
       }
+
 
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error("Failed to generate project image");
@@ -310,9 +349,10 @@ const App: React.FC = () => {
       if (state.filename !== savedFilename) {
         setState(prev => ({ ...prev, filename: savedFilename }));
       }
+      showToast("Project saved successfully!");
     } catch (e) {
       console.error("Save failed", e);
-      alert("Failed to save project.");
+      showToast("Failed to save project.", true);
     }
   };
 
@@ -323,9 +363,10 @@ const App: React.FC = () => {
         setState(loadedState);
         // Clear input
         if (fileInputRef.current) fileInputRef.current.value = '';
+        showToast("Project loaded successfully!");
       } catch (error) {
         console.error(error);
-        alert("Failed to load project. Ensure this is a valid .ngl or .png project file.");
+        showToast("Failed to load project. Ensure this is a valid .ngl or .png project file.", true);
       }
     }
   };
@@ -335,7 +376,7 @@ const App: React.FC = () => {
     { id: 'sticker', label: 'Sticker' },
     { id: 'ghost', label: 'Ghost' },
     { id: 'ink', label: 'Ink' },
-    { id: 'retro', label: 'Retro' },
+    { id: 'pumpkin', label: 'Pumpkin' },
   ];
 
   const selectedItem = state.items.find(i => i.id === state.selectedItemId);
@@ -376,6 +417,19 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden relative">
+      
+      {/* Toast Notification */}
+      {notification && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-2xl font-medium animate-bounce-in flex items-center gap-2 ${
+          notification.isError 
+            ? 'bg-red-500 text-white border border-red-400' 
+            : 'bg-emerald-600 text-white border border-emerald-500'
+        }`}>
+          {notification.isError && <span className="text-lg">⚠️</span>}
+          {notification.message}
+        </div>
+      )}
+
       <aside className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
         {/* Sidebar Header with Logo and Project Controls */}
         <div className="p-6 border-b border-slate-800 flex flex-col gap-4">
@@ -481,14 +535,29 @@ const App: React.FC = () => {
     
                   {/* Action Buttons */}
                   <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-700">
+                        {/* Row 1: Mirror & Mask */}
                         <button
                             onClick={() => updateItem(selectedItem.id, { isMirrored: !selectedItem.isMirrored })}
                             className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border ${selectedItem.isMirrored ? 'bg-slate-700 border-orange-500/50 text-orange-400' : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-200'}`}
+                            title="Flip Horizontal"
                           >
                             <MirrorIcon />
-                            <span className="text-[10px] font-medium">Mirror</span>
+                            <span className="text-[10px] font-medium">Flip</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => updateItem(selectedItem.id, { showCutout: !selectedItem.showCutout })}
+                          className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border ${
+                              selectedItem.showCutout 
+                                  ? 'bg-slate-700 border-orange-500/50 text-orange-400' 
+                                  : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
+                          }`}
+                        >
+                          <ScissorsIcon />
+                          <span className="text-[10px] font-medium">{selectedItem.showCutout ? 'Mask On' : 'Mask Off'}</span>
                         </button>
 
+                        {/* Row 2: Invert & Delete */}
                         <button
                           onClick={() => updateCompositing(selectedItem.id, !selectedItem.invertMask)}
                           className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border ${
@@ -502,19 +571,20 @@ const App: React.FC = () => {
                         </button>
 
                         <button 
-                          onClick={(e) => handleRetry(selectedItem.id, e)}
-                          className="p-2 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-200"
-                        >
-                          <RefreshIcon />
-                          <span className="text-[10px] font-medium">Retry</span>
-                        </button>
-
-                        <button 
                           onClick={() => removeItem(selectedItem.id)}
                           className="p-2 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
                         >
                           <TrashIcon />
                           <span className="text-[10px] font-medium">Delete</span>
+                        </button>
+
+                        {/* Row 3: Retry (Wide) */}
+                        <button 
+                          onClick={(e) => handleRetry(selectedItem.id, e)}
+                          className="col-span-2 p-3 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white hover:border-slate-500 mt-1"
+                        >
+                          <RefreshIcon />
+                          <span className="text-[11px] font-bold uppercase tracking-wider">Retry Extraction</span>
                         </button>
                   </div>
                 </div>
@@ -619,6 +689,17 @@ const App: React.FC = () => {
            POWERED BY GEMINI 3 PRO
         </div>
       </main>
+
+      <style>{`
+        @keyframes bounce-in {
+          0% { transform: translate(-50%, -200%); opacity: 0; }
+          60% { transform: translate(-50%, 10%); opacity: 1; }
+          100% { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .animate-bounce-in {
+          animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+      `}</style>
     </div>
   );
 };
