@@ -6,7 +6,7 @@ import { extractObjectFromImage } from './services/geminiService';
 import { applyMask, analyzeImageContent, loadImage, calculateInitialSize } from './utils/imageUtils';
 import { saveProject, loadProject } from './utils/projectUtils';
 import { CollageItem, AppState, LayerStyle } from './types';
-import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon, FolderIcon, SaveDiskIcon, StyleIcon, ScissorsIcon } from './components/Icons';
+import { MagicIcon, DownloadIcon, TrashIcon, RefreshIcon, InvertIcon, MirrorIcon, GripVerticalIcon, StyleIcon, ScissorsIcon, GeminiIcon, SaveDiskIcon, FileImageIcon, FileCodeIcon } from './components/Icons';
 import { Logo } from './components/Logo';
 import html2canvas from 'html2canvas';
 import confetti from 'canvas-confetti';
@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
   const [apiKeyLoading, setApiKeyLoading] = useState<boolean>(true);
   const [notification, setNotification] = useState<{message: string, isError: boolean} | null>(null);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
 
   const [state, setState] = useState<AppState>({
     baseImage: null,
@@ -22,7 +23,8 @@ const App: React.FC = () => {
     selectedItemId: null,
     isExporting: false,
     filename: undefined,
-    thumbnail: undefined
+    thumbnail: undefined,
+    canvasDimensions: undefined
   });
 
   const exportContainerRef = useRef<HTMLDivElement>(null);
@@ -76,6 +78,10 @@ const App: React.FC = () => {
 
   const handleBaseImageUpload = (base64: string) => {
     setState(prev => ({ ...prev, baseImage: base64 }));
+  };
+
+  const handleCanvasDimensions = (width: number, height: number) => {
+      setState(prev => ({ ...prev, canvasDimensions: { width, height } }));
   };
 
   const processLayer = async (itemId: string, originalSrc: string) => {
@@ -136,13 +142,39 @@ const App: React.FC = () => {
 
     let initialWidth = 200;
     let initialHeight = 200;
-    try {
-      const img = await loadImage(base64);
-      const size = calculateInitialSize(img.width, img.height, 300);
-      initialWidth = size.width;
-      initialHeight = size.height;
-    } catch (e) {
-      console.error("Failed to load source image for dimensions", e);
+    
+    // Default to center if dimensions unknown
+    let startX = 200;
+    let startY = 200;
+    
+    if (state.canvasDimensions) {
+        // Target size increased to 0.9 (90%) of the smaller dimension
+        const targetSize = Math.min(state.canvasDimensions.width, state.canvasDimensions.height) * 0.9;
+        
+        try {
+          const img = await loadImage(base64);
+          const size = calculateInitialSize(img.width, img.height, targetSize);
+          initialWidth = size.width;
+          initialHeight = size.height;
+        } catch (e) {
+            console.error("Failed to load source image for dimensions", e);
+             initialWidth = targetSize;
+             initialHeight = targetSize;
+        }
+
+        // STRICT BOUNDARY LOGIC
+        // Ensure the object is strictly within the canvas with padding
+        const padding = 50;
+        
+        // Calculate max allowed positions
+        const maxX = Math.max(padding, state.canvasDimensions.width - initialWidth - padding);
+        const maxY = Math.max(padding, state.canvasDimensions.height - initialHeight - padding);
+        const minX = padding;
+        const minY = padding;
+
+        // Randomize within legal bounds
+        startX = Math.random() * (maxX - minX) + minX;
+        startY = Math.random() * (maxY - minY) + minY;
     }
 
     const newItem: CollageItem = {
@@ -155,7 +187,7 @@ const App: React.FC = () => {
       isMirrored: false,
       style: 'normal',
       isProcessing: true,
-      position: { x: 50 + state.items.length * 20, y: 50 + state.items.length * 20 },
+      position: { x: startX, y: startY },
       size: { width: initialWidth, height: initialHeight },
       crop: { top: 0, bottom: 0, left: 0, right: 0 },
       zIndex: maxZ + 1,
@@ -246,27 +278,71 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, items: reorderedItems }));
   };
 
-  const handleDownload = async () => {
+  const openSaveModal = () => {
+      setIsSaveModalOpen(true);
+  };
+
+  const executeDownloadJPG = async () => {
+    setIsSaveModalOpen(false);
     if (!exportContainerRef.current) return;
     
     confetti({
       particleCount: 150,
       spread: 70,
       origin: { y: 0.6 },
-      colors: ['#f97316', '#fbbf24', '#ffffff'] // Orange/Yellow/White confetti
+      colors: ['#f97316', '#fbbf24', '#ffffff']
     });
 
     selectItem(null);
     setTimeout(async () => {
         try {
             if(!exportContainerRef.current) return;
+            
             const canvas = await html2canvas(exportContainerRef.current, {
                 useCORS: true,
                 backgroundColor: null,
-                scale: 2
+                scale: 1, 
+                onclone: (clonedDoc) => {
+                    const clonedExportDiv = clonedDoc.getElementById('canvas-export-div');
+                    if (clonedExportDiv) {
+                        clonedExportDiv.style.transform = 'none';
+                        clonedExportDiv.style.position = 'static';
+                        clonedExportDiv.style.left = 'auto';
+                        clonedExportDiv.style.top = 'auto';
+                        
+                        // FIX: Remove animation grain/dimness from base image during export
+                        const baseImg = clonedExportDiv.querySelector('#canvas-base-image');
+                        if (baseImg) {
+                            baseImg.classList.remove('animate-grain-reveal');
+                            // Ensure filters are reset
+                            (baseImg as HTMLElement).style.filter = 'none';
+                            (baseImg as HTMLElement).style.opacity = '1';
+                        }
+                        
+                        // FIX: Remove item animations (Ghost floating) so they capture cleanly
+                        // But KEEP the filters (grayscale etc)
+                        const items = clonedExportDiv.querySelectorAll('[class*="anim-"]');
+                        items.forEach(el => {
+                            el.classList.remove('anim-float-ghost', 'anim-shimmer-fire');
+                            // Reset transform to 0 state to avoid capture artifacts
+                            // (base transform is handled by parent/child, animation is removed)
+                        });
+                    }
+                }
             });
             const link = document.createElement('a');
-            link.download = 'ngl-story.jpg';
+            
+            // Format filename to match PNG format: nglstory-YYYYMMDDTHHMMSS.jpg
+            let filename = state.filename ? state.filename.replace(/\.(png|ngl|json)$/, '.jpg') : '';
+            if (!filename) {
+                const now = new Date();
+                const pad = (n: number) => n.toString().padStart(2, '0');
+                const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+                const timeStr = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+                filename = `nglstory-${dateStr}T${timeStr}.jpg`;
+            }
+
+            link.download = filename;
             link.href = canvas.toDataURL('image/jpeg', 0.9);
             link.click();
         } catch (e) {
@@ -276,76 +352,52 @@ const App: React.FC = () => {
     }, 100);
   };
 
-  const handleSaveProject = async () => {
+  const executeSaveProject = async () => {
+    setIsSaveModalOpen(false);
     try {
       if (!exportContainerRef.current || !state.baseImage) {
         showToast("Create a composition before saving.", true);
         return;
       }
       
-      // 1. Temporarily deselect to capture a clean image
       selectItem(null);
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      // 2. Generate the visual representation (PNG)
-      // We use html2canvas to create the "Thumbnail" which is actually the file container
       const canvas = await html2canvas(exportContainerRef.current, {
           useCORS: true,
-          backgroundColor: '#020617', // Match the app bg
-          scale: 1, // 1x scale is fine for a project file thumbnail
-          logging: false
+          backgroundColor: '#020617', 
+          scale: 1, 
+          logging: false,
+          onclone: (clonedDoc) => {
+             const clonedExportDiv = clonedDoc.getElementById('canvas-export-div');
+             if (clonedExportDiv) {
+                 clonedExportDiv.style.transform = 'none';
+                 clonedExportDiv.style.position = 'static';
+                 clonedExportDiv.style.left = 'auto';
+                 clonedExportDiv.style.top = 'auto';
+
+                 // FIX: Remove animation grain/dimness from base image during export
+                 const baseImg = clonedExportDiv.querySelector('#canvas-base-image');
+                 if (baseImg) {
+                     baseImg.classList.remove('animate-grain-reveal');
+                     (baseImg as HTMLElement).style.filter = 'none';
+                     (baseImg as HTMLElement).style.opacity = '1';
+                 }
+
+                 // FIX: Remove item animations for clean capture
+                 const items = clonedExportDiv.querySelectorAll('[class*="anim-"]');
+                 items.forEach(el => {
+                    el.classList.remove('anim-float-ghost', 'anim-shimmer-fire');
+                 });
+             }
+          }
       });
       
-      // Add Watermark to distinguish project file from standard export
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const w = canvas.width;
-        const h = canvas.height;
-
-        ctx.save();
-
-        // 1) CHANGE THESE TWO FACTORS TO TEST POSITION
-        const posAlongDiagonal = 0.5; // 0 = bottom‑left, 1 = top‑right
-        const extraOffset = +0.15 * h; // shift perpendicular to the diagonal
-
-        // point along the diagonal from (0,h) → (w,0)
-        const x = posAlongDiagonal * w;
-        const y = h - posAlongDiagonal * h;
-
-        ctx.translate(x, y);
-
-        // 2) CHANGE THIS TO TEST ANGLE
-        const baseAngle = Math.atan2(-h, w);   // bottom‑left → top‑right
-        const extraRotation = 0;               // e.g. Math.PI * 0.02 for a small tweak
-        ctx.rotate(baseAngle + extraRotation);
-
-        // move text away from the exact center line if needed
-        ctx.translate(0, extraOffset);
-
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        const fontSize = Math.min(w, h) * 0.15;
-        ctx.font = `900 ${fontSize}px 'Inter', sans-serif`;
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.fillText('PROJECT FILE', 0, 0);
-
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-        ctx.lineWidth = 2;
-        ctx.strokeText('PROJECT FILE', 0, 0);
-
-        ctx.restore();
-      }
-
-
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error("Failed to generate project image");
 
-      // 3. Save as Polyglot PNG
       const savedFilename = await saveProject(state, blob);
       
-      // Update state with new filename
       if (state.filename !== savedFilename) {
         setState(prev => ({ ...prev, filename: savedFilename }));
       }
@@ -356,19 +408,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLoadProject = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      try {
-        const loadedState = await loadProject(e.target.files[0]);
-        setState(loadedState);
-        // Clear input
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        showToast("Project loaded successfully!");
-      } catch (error) {
-        console.error(error);
-        showToast("Failed to load project. Ensure this is a valid .ngl or .png project file.", true);
+  const handleFileDrop = async (e: React.DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          const file = e.dataTransfer.files[0];
+          try {
+            const loadedState = await loadProject(file);
+            setState(loadedState);
+            showToast("Project loaded successfully!");
+          } catch (error) {
+            console.error(error);
+            showToast("Failed to load project. Ensure this is a valid .ngl or .png project file.", true);
+          }
       }
-    }
   };
 
   const styles: { id: LayerStyle; label: string; }[] = [
@@ -398,8 +450,8 @@ const App: React.FC = () => {
                <Logo />
              </div>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Welcome to ngl v1.0</h1>
-          <p className="text-slate-400 mb-8">
+          <h1 className="text-3xl font-bold font-['Chewy'] text-white mb-2">Welcome to ngl v1.0</h1>
+          <p className="text-slate-400 mb-8 font-['Chewy'] text-xl">
              Based on a true story 😉
           </p>
           <button 
@@ -416,7 +468,11 @@ const App: React.FC = () => {
   const reversedItems = [...state.items].reverse();
 
   return (
-    <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden relative">
+    <div 
+        className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden relative"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleFileDrop}
+    >
       
       {/* Toast Notification */}
       {notification && (
@@ -430,38 +486,60 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <aside className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
+      {/* Save Modal */}
+      {isSaveModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
+              <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700 shadow-2xl transform transition-all scale-100">
+                  <h3 className="text-xl font-bold text-white mb-2 text-center font-['Chewy'] tracking-wide text-2xl">Save Your Story</h3>
+                  <p className="text-slate-400 text-sm text-center mb-6">Choose how you want to save your work.</p>
+                  
+                  <div className="grid gap-4">
+                      <button 
+                        onClick={executeSaveProject}
+                        className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-orange-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left"
+                      >
+                          <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-orange-500/20 group-hover:text-orange-400 transition-colors">
+                            <FileCodeIcon />
+                          </div>
+                          <div>
+                              <h4 className="font-bold text-slate-200 group-hover:text-white">Save Project (.png)</h4>
+                              <p className="text-xs text-slate-400 mt-1">Saves an editable file containing all layers and data. Use this to continue editing later.</p>
+                          </div>
+                      </button>
+
+                      <button 
+                        onClick={executeDownloadJPG}
+                        className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-orange-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left"
+                      >
+                           <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-orange-500/20 group-hover:text-orange-400 transition-colors">
+                            <FileImageIcon />
+                          </div>
+                          <div>
+                              <h4 className="font-bold text-slate-200 group-hover:text-white">Download Image (.jpg)</h4>
+                              <p className="text-xs text-slate-400 mt-1">Exports a flattened high-quality image for sharing on social media.</p>
+                          </div>
+                      </button>
+                  </div>
+
+                  <button 
+                    onClick={() => setIsSaveModalOpen(false)}
+                    className="mt-6 w-full py-2 text-sm text-slate-500 hover:text-slate-300 font-medium"
+                  >
+                      Cancel
+                  </button>
+              </div>
+          </div>
+      )}
+
+      {/* Sidebar - Widened to w-96 */}
+      <aside className="w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
         {/* Sidebar Header with Logo and Project Controls */}
         <div className="p-6 border-b border-slate-800 flex flex-col gap-4">
            <Logo />
            <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-500 font-medium tracking-wide">
-                Based on a true story 😉
+              <p className="text-sm text-slate-500 font-['Chewy'] tracking-wide text-lg text-amber-500/80 -mt-1 ml-14">
+                Based on a true story 😜
               </p>
-              
-              <div className="flex gap-2">
-                 <input 
-                    type="file" 
-                    accept=".json,.ngl,.png" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    onChange={handleLoadProject} 
-                 />
-                 <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                    title="Load Project"
-                 >
-                    <FolderIcon />
-                 </button>
-                 <button 
-                    onClick={handleSaveProject}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                    title="Save Project"
-                 >
-                    <SaveDiskIcon />
-                 </button>
-              </div>
            </div>
         </div>
 
@@ -581,9 +659,11 @@ const App: React.FC = () => {
                         {/* Row 3: Retry (Wide) */}
                         <button 
                           onClick={(e) => handleRetry(selectedItem.id, e)}
-                          className="col-span-2 p-3 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white hover:border-slate-500 mt-1"
+                          className="col-span-2 p-3 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white hover:border-slate-500 mt-1 group"
                         >
-                          <RefreshIcon />
+                          <div className="group-hover:text-blue-400 transition-colors">
+                              <GeminiIcon />
+                          </div>
                           <span className="text-[11px] font-bold uppercase tracking-wider">Retry Extraction</span>
                         </button>
                   </div>
@@ -649,20 +729,20 @@ const App: React.FC = () => {
 
         <div className="p-6 border-t border-slate-800 bg-slate-900">
            <button 
-             onClick={handleDownload}
+             onClick={openSaveModal}
              disabled={!state.baseImage}
              className={`w-full py-3 px-4 rounded-lg font-bold text-sm uppercase tracking-wide flex items-center justify-center gap-2 transition-all transform active:scale-95
                ${state.baseImage 
                  ? 'bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 shadow-lg shadow-orange-500/20 text-white' 
                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
            >
-             <DownloadIcon />
-             Download JPG
+             <SaveDiskIcon />
+             Save / Download
            </button>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col relative">
+      <main className="flex-1 flex flex-col relative min-w-0 min-h-0">
         {state.baseImage ? (
            <Canvas 
              baseImage={state.baseImage}
@@ -671,16 +751,20 @@ const App: React.FC = () => {
              onSelectItem={selectItem}
              onUpdateItem={updateItem}
              onRemoveItem={removeItem}
+             onDimensionsLoaded={handleCanvasDimensions}
              exportRef={exportContainerRef}
            />
         ) : (
-          /* Empty State / Welcome Splash */
+          /* Empty State / Welcome Splash / Drop Zone */
           <div className="flex-1 flex flex-col items-center justify-center bg-dot-grid relative overflow-hidden animate-fade-in">
              <div className="scale-[3] transform p-10 opacity-50 hover:opacity-100 transition-opacity duration-1000 grayscale hover:grayscale-0">
                 <Logo />
              </div>
-             <p className="mt-8 text-slate-500 text-lg font-medium animate-pulse">
+             <p className="mt-8 text-slate-500 text-2xl font-['Chewy'] animate-pulse tracking-wide">
                Set the scene to begin.
+             </p>
+             <p className="mt-2 text-slate-600 text-xs">
+               Or drag & drop a saved project file here
              </p>
           </div>
         )}

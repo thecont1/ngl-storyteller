@@ -48,6 +48,13 @@ export const RefreshIcon = () => (
   </svg>
 );
 
+export const GeminiIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2L14.4 7.2C14.7 7.9 15.3 8.5 16 8.8L21.2 11.2C21.6 11.4 21.6 12 21.2 12.2L16 14.6C15.3 14.9 14.7 15.5 14.4 16.2L12 21.4C11.8 21.8 11.2 21.8 11 21.4L8.6 16.2C8.3 15.5 7.7 14.9 7 14.6L1.8 12.2C1.4 12 1.4 11.4 1.8 11.2L7 8.8C7.7 8.5 8.3 7.9 8.6 7.2L11 2C11.2 1.6 11.8 1.6 12 2Z" fill="currentColor" fillOpacity="0.2" stroke="currentColor" />
+    <path d="M16 16L17 18.5L19.5 19.5L17 20.5L16 23L15 20.5L12.5 19.5L15 18.5L16 16Z" fill="currentColor" fillOpacity="0.2" stroke="currentColor" />
+  </svg>
+);
+
 export const InvertIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
@@ -111,5 +118,23 @@ export const ScissorsIcon = () => (
     <line x1="20" y1="4" x2="8.12" y2="15.88" />
     <line x1="14.47" y1="14.48" x2="20" y2="20" />
     <line x1="8.12" y1="8.12" x2="12" y2="12" />
+  </svg>
+);
+
+export const FileCodeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+    <polyline points="14 2 14 8 20 8" />
+    <path d="m10 13-2 2 2 2" />
+    <path d="m14 17 2-2-2-2" />
+  </svg>
+);
+
+export const FileImageIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+    <polyline points="14 2 14 8 20 8" />
+    <circle cx="10" cy="13" r="2" />
+    <path d="m20 17-1.09-2.18a2 2 0 0 0-2.73-.55L15 15" />
   </svg>
 );

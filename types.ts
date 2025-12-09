@@ -62,6 +62,7 @@ export interface AppState {
   isExporting: boolean;
   filename?: string; // Persist the filename across saves
   thumbnail?: string; // Embedded base64 thumbnail of the project
+  canvasDimensions?: { width: number; height: number }; // The natural dimensions of the base image
 }
 
 // Extend Window interface for AI Studio API

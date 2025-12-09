@@ -1,3 +1,4 @@
+
 /**
  * Converts a File object to a Base64 string.
  */
@@ -140,7 +141,7 @@ export const applyMask = async (imageSrc: string, maskSrc: string, invert: boole
 /**
  * Scales an item to fit within a default size while maintaining aspect ratio.
  */
-export const calculateInitialSize = (imgWidth: number, imgHeight: number, targetSize: number = 300) => {
+export const calculateInitialSize = (imgWidth: number, imgHeight: number, targetSize: number = 1200) => {
   const aspectRatio = imgWidth / imgHeight;
   if (aspectRatio > 1) {
     return { width: targetSize, height: targetSize / aspectRatio };
