@@ -187,11 +187,11 @@ export const Canvas: React.FC<CanvasProps> = ({
         case 'sticker':
             return 'filter-sticker';
         case 'ghost':
-            return 'filter-ghost mix-blend-screen opacity-90';
+            return 'filter-ghost';
         case 'ink':
-            return 'filter-ink mix-blend-multiply opacity-95';
+            return 'filter-ink mix-blend-multiply opacity-90';
         case 'retro':
-            return 'filter-retro';
+            return 'filter-retro sepia contrast-125';
         default:
             return '';
     }
@@ -244,44 +244,34 @@ export const Canvas: React.FC<CanvasProps> = ({
             }}
             onMouseDown={(e) => handleMouseDown(e, item, DragMode.DRAG)}
           >
-            {/* Style Wrapper: Applies Filters and Blend Modes. 
-                Separated from Crop Wrapper so shadows don't get clipped. */}
-            <div className={`w-full h-full transition-all duration-300 ${getStyleClasses(item.style)}`}>
-                
-                {/* Crop Wrapper: Handles the physical cutting of the image */}
-                <div 
-                    className="w-full h-full relative" 
-                    style={{ 
-                        clipPath: `inset(${item.crop.top}% ${item.crop.right}% ${item.crop.bottom}% ${item.crop.left}%)`,
-                        transition: 'clip-path 0.1s ease-out'
-                    }}
-                >
-                    {item.isProcessing && (
-                        <div className="absolute inset-0 z-10 pointer-events-none">
-                            <img 
-                                src={item.originalSrc}
-                                alt="Loading"
-                                className="w-full h-full object-contain opacity-40 transition-opacity duration-1000"
-                            />
-                            <div className="absolute bottom-4 left-4 right-4 h-2 bg-slate-700/50 rounded-full overflow-hidden backdrop-blur-sm">
-                                <div className="h-full bg-orange-500 animate-progress-real"></div>
-                            </div>
+            <div className={`w-full h-full relative ${getStyleClasses(item.style)}`} style={{ 
+                clipPath: `inset(${item.crop.top}% ${item.crop.right}% ${item.crop.bottom}% ${item.crop.left}%)`,
+                transition: 'clip-path 0.1s ease-out'
+            }}>
+                {item.isProcessing && (
+                    <div className="absolute inset-0 z-10 pointer-events-none">
+                        <img 
+                            src={item.originalSrc}
+                            alt="Loading"
+                            className="w-full h-full object-contain opacity-40 transition-opacity duration-1000"
+                        />
+                        <div className="absolute bottom-4 left-4 right-4 h-2 bg-slate-700/50 rounded-full overflow-hidden backdrop-blur-sm">
+                            <div className="h-full bg-orange-500 animate-progress-real"></div>
                         </div>
-                    )}
-                    
-                    <img 
-                        src={item.processedSrc || item.originalSrc} 
-                        alt={item.name}
-                        className={`w-full h-full object-contain select-none transition-opacity duration-700
-                           ${item.isProcessing ? 'opacity-0' : 'opacity-100'}
-                        `}
-                        draggable={false}
-                        style={{ transform: item.isMirrored ? 'scaleX(-1)' : 'none' }}
-                    />
-                </div>
+                    </div>
+                )}
+                
+                <img 
+                    src={item.processedSrc || item.originalSrc} 
+                    alt={item.name}
+                    className={`w-full h-full object-contain select-none transition-opacity duration-700
+                       ${item.isProcessing ? 'opacity-0' : 'opacity-100'}
+                    `}
+                    draggable={false}
+                    style={{ transform: item.isMirrored ? 'scaleX(-1)' : 'none' }}
+                />
             </div>
             
-            {/* Selection UI - Outside of Style Wrapper so it isn't affected by filters */}
             {selectedItemId === item.id && (
               <div 
                 className="absolute border border-orange-500 pointer-events-none"
@@ -354,30 +344,30 @@ export const Canvas: React.FC<CanvasProps> = ({
         
         @keyframes float-ghost {
           0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-5px); }
+          50% { transform: translateY(-8px); }
         }
 
-        /* 
-           Using multiple drop-shadows to simulate a sticker stroke.
-           We must ensure this filter is applied to a container *outside* the clip-path,
-           otherwise the shadow (which is outside the object) gets clipped.
-        */
+        /* Simulating a sticker outline using drop-shadows. */
         .filter-sticker {
-            filter: drop-shadow(0px -3px 0px white) 
-                    drop-shadow(0px 3px 0px white) 
-                    drop-shadow(-3px 0px 0px white) 
-                    drop-shadow(3px 0px 0px white)
+            filter: drop-shadow(0px -2px 0px white) 
+                    drop-shadow(0px 2px 0px white) 
+                    drop-shadow(-2px 0px 0px white) 
+                    drop-shadow(2px 0px 0px white)
                     drop-shadow(2px 4px 6px rgba(0,0,0,0.5));
         }
         
         .filter-ghost {
-            /* Sepia+HueRotate creates a cool blue tint from any image */
-            filter: sepia(1) hue-rotate(180deg) saturate(1.5) drop-shadow(0 0 10px rgba(100, 200, 255, 0.8));
+            /* 
+               Grayscale+Sepia kills the original colors (fixing green artifacts).
+               Hue-rotate shifts Sepia (orange/brown) to Ghostly Blue/Cyan.
+               Saturate boosts the intensity.
+            */
+            filter: grayscale(100%) sepia(100%) hue-rotate(190deg) saturate(300%) opacity(0.85) drop-shadow(0 0 8px rgba(150, 220, 255, 0.6));
             animation: float-ghost 3s ease-in-out infinite;
         }
 
         .filter-ink {
-            filter: grayscale(100%) contrast(150%) brightness(0.8);
+            filter: grayscale(100%) contrast(150%) brightness(0.9);
         }
 
         .filter-retro {

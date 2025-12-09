@@ -60,6 +60,8 @@ export interface AppState {
   items: CollageItem[];
   selectedItemId: string | null;
   isExporting: boolean;
+  filename?: string; // Persist the filename across saves
+  thumbnail?: string; // Embedded base64 thumbnail of the project
 }
 
 // Extend Window interface for AI Studio API

@@ -19,7 +19,9 @@ const App: React.FC = () => {
     baseImage: null,
     items: [],
     selectedItemId: null,
-    isExporting: false
+    isExporting: false,
+    filename: undefined,
+    thumbnail: undefined
   });
 
   const exportContainerRef = useRef<HTMLDivElement>(null);
@@ -253,8 +255,65 @@ const App: React.FC = () => {
     }, 100);
   };
 
-  const handleSaveProject = () => {
-    saveProject(state);
+  const handleSaveProject = async () => {
+    try {
+      if (!exportContainerRef.current || !state.baseImage) {
+        alert("Create a composition before saving.");
+        return;
+      }
+      
+      // 1. Temporarily deselect to capture a clean image
+      selectItem(null);
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // 2. Generate the visual representation (PNG)
+      // We use html2canvas to create the "Thumbnail" which is actually the file container
+      const canvas = await html2canvas(exportContainerRef.current, {
+          useCORS: true,
+          backgroundColor: '#020617', // Match the app bg
+          scale: 1, // 1x scale is fine for a project file thumbnail
+          logging: false
+      });
+      
+      // Add Watermark to distinguish project file from standard export
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(-Math.PI / 6);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Scale text based on canvas size
+        const fontSize = Math.min(w, h) * 0.15;
+        ctx.font = `900 ${fontSize}px 'Inter', sans-serif`;
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillText('PROJECT FILE', 0, 0);
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 2;
+        ctx.strokeText('PROJECT FILE', 0, 0);
+        
+        ctx.restore();
+      }
+
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error("Failed to generate project image");
+
+      // 3. Save as Polyglot PNG
+      const savedFilename = await saveProject(state, blob);
+      
+      // Update state with new filename
+      if (state.filename !== savedFilename) {
+        setState(prev => ({ ...prev, filename: savedFilename }));
+      }
+    } catch (e) {
+      console.error("Save failed", e);
+      alert("Failed to save project.");
+    }
   };
 
   const handleLoadProject = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -265,8 +324,8 @@ const App: React.FC = () => {
         // Clear input
         if (fileInputRef.current) fileInputRef.current.value = '';
       } catch (error) {
-        alert("Failed to load project file.");
         console.error(error);
+        alert("Failed to load project. Ensure this is a valid .ngl or .png project file.");
       }
     }
   };
@@ -329,7 +388,7 @@ const App: React.FC = () => {
               <div className="flex gap-2">
                  <input 
                     type="file" 
-                    accept=".json" 
+                    accept=".json,.ngl,.png" 
                     ref={fileInputRef} 
                     className="hidden" 
                     onChange={handleLoadProject} 
@@ -528,7 +587,7 @@ const App: React.FC = () => {
                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
            >
              <DownloadIcon />
-             Save Composition
+             Download JPG
            </button>
         </div>
       </aside>
