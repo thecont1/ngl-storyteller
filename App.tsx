@@ -960,7 +960,7 @@ const App: React.FC = () => {
         )}
         
         <div className="absolute bottom-1 right-2 text-[10px] text-slate-500/80 pointer-events-none select-none font-mono z-0">
-           POWERED BY GEMINI 3 PRO
+           POWERED BY GEMINI 3 PRO IMAGE
         </div>
       </main>
 
