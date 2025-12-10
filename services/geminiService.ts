@@ -45,3 +45,46 @@ export const extractObjectFromImage = async (base64Image: string): Promise<strin
     throw error;
   }
 };
+
+/**
+ * Uses Gemini to reimagine the image in the style of René Magritte.
+ */
+export const transformToMagritteStyle = async (base64Image: string): Promise<string> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const base64Data = base64Image.split(',')[1];
+    const mimeType = base64Image.substring(base64Image.indexOf(':') + 1, base64Image.indexOf(';'));
+
+    const model = 'gemini-3-pro-image-preview';
+
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: {
+        parts: [
+          { inlineData: { mimeType: mimeType, data: base64Data } },
+          { text: "Reimagine this entire scene in the surrealist style of René Magritte. Keep the composition similar but apply his signature flat lighting, blue cloudy skies, mysterious bowler hat men if appropriate, and dreamlike atmosphere. Make it look like a high-quality oil painting." }
+        ]
+      }
+    });
+
+    const candidates = response.candidates;
+    if (!candidates || candidates.length === 0) throw new Error("No response from Gemini");
+
+    const parts = candidates[0].content.parts;
+    let resultImageBase64 = '';
+
+    for (const part of parts) {
+      if (part.inlineData && part.inlineData.data) {
+        resultImageBase64 = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+        break;
+      }
+    }
+
+    if (!resultImageBase64) throw new Error("Gemini did not return a transformed image.");
+    return resultImageBase64;
+
+  } catch (error) {
+    console.error("Gemini Transformation Error:", error);
+    throw error;
+  }
+};

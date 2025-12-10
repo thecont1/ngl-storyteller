@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { Canvas } from './components/Canvas';
-import { extractObjectFromImage } from './services/geminiService';
+import { extractObjectFromImage, transformToMagritteStyle } from './services/geminiService';
 import { applyMask, analyzeImageContent, loadImage, calculateInitialSize, fileToBase64 } from './utils/imageUtils';
 import { saveProject, loadProject, saveProjectNGL } from './utils/projectUtils';
 import { CollageItem, AppState, LayerStyle } from './types';
-import { TrashIcon, InvertIcon, MirrorIcon, GripVerticalIcon, StyleIcon, ScissorsIcon, GeminiIcon, SaveDiskIcon, FileImageIcon, FileCodeIcon, FileJsonIcon } from './components/Icons';
+import { TrashIcon, InvertIcon, MirrorIcon, GripVerticalIcon, StyleIcon, ScissorsIcon, GeminiIcon, SaveDiskIcon, FileImageIcon, FileCodeIcon, FileJsonIcon, MagritteIcon } from './components/Icons';
 import { Logo } from './components/Logo';
 import html2canvas from 'html2canvas';
 
@@ -455,6 +455,105 @@ const App: React.FC = () => {
     }
   };
 
+  const executeSaveMagritte = async () => {
+    setIsSaveModalOpen(false);
+    if (!exportContainerRef.current) return;
+    
+    showToast("Dreaming up a masterpiece... this may take a moment.", false);
+
+    selectItem(null);
+    setTimeout(async () => {
+        try {
+            if(!exportContainerRef.current) return;
+            
+            // 1. Capture Canvas cleanly
+            const canvas = await html2canvas(exportContainerRef.current, {
+                useCORS: true,
+                backgroundColor: null,
+                scale: 1, 
+                onclone: (clonedDoc) => {
+                    const clonedExportDiv = clonedDoc.getElementById('canvas-export-div');
+                    if (clonedExportDiv) {
+                        clonedExportDiv.style.transform = 'none';
+                        clonedExportDiv.style.position = 'static';
+                        clonedExportDiv.style.left = 'auto';
+                        clonedExportDiv.style.top = 'auto';
+                        
+                        const baseImg = clonedExportDiv.querySelector('#canvas-base-image');
+                        if (baseImg) {
+                            baseImg.classList.remove('animate-grain-reveal');
+                            (baseImg as HTMLElement).style.filter = 'none';
+                            (baseImg as HTMLElement).style.opacity = '1';
+                        }
+                        
+                        const items = clonedExportDiv.querySelectorAll('[class*="anim-"]');
+                        items.forEach(el => {
+                            el.classList.remove('anim-float-ghost', 'anim-shimmer-fire');
+                        });
+                    }
+                }
+            });
+            
+            // 2. Get Base64
+            const base64 = canvas.toDataURL('image/jpeg', 0.9);
+
+            // 3. Transform via Gemini
+            const transformedBase64 = await transformToMagritteStyle(base64);
+
+            // 4. Convert to Blob for saving
+            const res = await fetch(transformedBase64);
+            const blob = await res.blob();
+
+            // 5. Generate Filename (nglstory-...-magritte.jpg)
+            let filename = state.filename ? state.filename.replace(/\.(png|ngl|json)$/, '-magritte.jpg') : '';
+            if (!filename) {
+                const now = new Date();
+                const pad = (n: number) => n.toString().padStart(2, '0');
+                const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+                const timeStr = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+                filename = `nglstory-${dateStr}T${timeStr}-magritte.jpg`;
+            }
+
+            // 6. Save (File System API or Link)
+            let saved = false;
+            if (window.showSaveFilePicker) {
+               try {
+                  const handle = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{
+                      description: 'JPEG Image',
+                      accept: { 'image/jpeg': ['.jpg'] }
+                    }]
+                  });
+                  const writable = await handle.createWritable();
+                  await writable.write(blob);
+                  await writable.close();
+                  saved = true;
+               } catch (err: any) {
+                  if (err.name === 'AbortError') return;
+                  console.warn("File Picker API failed, falling back to download link.", err);
+               }
+            }
+            
+            if (!saved) {
+               const url = URL.createObjectURL(blob);
+               const link = document.createElement('a');
+               link.download = filename;
+               link.href = url;
+               document.body.appendChild(link);
+               link.click();
+               document.body.removeChild(link);
+               URL.revokeObjectURL(url);
+            }
+            
+            showToast("Surrealist masterpiece saved!");
+        } catch (e) {
+            console.error("Magritte transformation failed", e);
+            showToast("Failed to create Magritte style image. Try again.", true);
+        }
+    }, 100);
+  };
+
   const handleFileDrop = async (e: React.DragEvent) => {
       e.preventDefault();
       if (e.dataTransfer.files && e.dataTransfer.files[0]) {
@@ -581,6 +680,19 @@ const App: React.FC = () => {
                           <div>
                               <h4 className="font-bold text-slate-200 group-hover:text-white">Download Image (.jpg)</h4>
                               <p className="text-xs text-slate-400 mt-1">Exports a flattened high-quality image for sharing on social media.</p>
+                          </div>
+                      </button>
+
+                      <button 
+                        onClick={executeSaveMagritte}
+                        className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-blue-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left"
+                      >
+                           <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors">
+                            <MagritteIcon />
+                          </div>
+                          <div>
+                              <h4 className="font-bold text-slate-200 group-hover:text-white">Surrealist (Magritte)</h4>
+                              <p className="text-xs text-slate-400 mt-1">Reimagine your scene in the style of René Magritte using GenAI.</p>
                           </div>
                       </button>
 
