@@ -1,4 +1,5 @@
 
+
 export interface Position {
   x: number;
   y: number;
@@ -65,10 +66,42 @@ export interface AppState {
   canvasDimensions?: { width: number; height: number }; // The natural dimensions of the base image
 }
 
-// Extend Window interface for AI Studio API
+// Extend Window interface for AI Studio API and File System Access API
 declare global {
+  // File System Access API Types
+  interface FileSystemHandle {
+    readonly kind: 'file' | 'directory';
+    readonly name: string;
+  }
+
+  interface FileSystemFileHandle extends FileSystemHandle {
+    readonly kind: 'file';
+    getFile(): Promise<File>;
+    createWritable(options?: any): Promise<FileSystemWritableFileStream>;
+  }
+
+  interface FileSystemWritableFileStream extends WritableStream {
+    write(data: BufferSource | Blob | string): Promise<void>;
+    seek(position: number): Promise<void>;
+    truncate(size: number): Promise<void>;
+    close(): Promise<void>;
+  }
+
   interface AIStudio {
-    hasSelectedApiKey: () => Promise<boolean>;
-    openSelectKey: () => Promise<void>;
+    // Methods are likely defined in the global environment already.
+    // Redeclaring them here causes duplicate identifier errors.
+    // hasSelectedApiKey(): Promise<boolean>;
+    // openSelectKey(): Promise<void>;
+  }
+
+  interface Window {
+    showSaveFilePicker?: (options?: {
+      suggestedName?: string;
+      types?: {
+        description?: string;
+        accept: Record<string, string[]>;
+      }[];
+      excludeAcceptAllOption?: boolean;
+    }) => Promise<FileSystemFileHandle>;
   }
 }

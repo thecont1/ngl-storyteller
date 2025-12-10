@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { Canvas } from './components/Canvas';
@@ -317,13 +316,14 @@ const App: React.FC = () => {
                         items.forEach(el => {
                             el.classList.remove('anim-float-ghost', 'anim-shimmer-fire');
                             // Reset transform to 0 state to avoid capture artifacts
-                            // (base transform is handled by parent/child, animation is removed)
                         });
                     }
                 }
             });
-            const link = document.createElement('a');
             
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            if (!blob) throw new Error("Failed to generate JPG");
+
             // Format filename to match PNG format: nglstory-YYYYMMDDTHHMMSS.jpg
             let filename = state.filename ? state.filename.replace(/\.(png|ngl|json)$/, '.jpg') : '';
             if (!filename) {
@@ -334,9 +334,40 @@ const App: React.FC = () => {
                 filename = `nglstory-${dateStr}T${timeStr}.jpg`;
             }
 
-            link.download = filename;
-            link.href = canvas.toDataURL('image/jpeg', 0.9);
-            link.click();
+            // Use File System Access API if available to prompt for overwrite
+            let saved = false;
+            if (window.showSaveFilePicker) {
+               try {
+                  const handle = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{
+                      description: 'JPEG Image',
+                      accept: { 'image/jpeg': ['.jpg'] }
+                    }]
+                  });
+                  const writable = await handle.createWritable();
+                  await writable.write(blob);
+                  await writable.close();
+                  saved = true;
+               } catch (err: any) {
+                  // If user cancelled, stop
+                  if (err.name === 'AbortError') return;
+                  // If other error (e.g. cross-origin/iframe), fall through to link download
+                  console.warn("File Picker API failed, falling back to download link.", err);
+               }
+            }
+            
+            if (!saved) {
+               // Fallback: Create blob URL
+               const url = URL.createObjectURL(blob);
+               const link = document.createElement('a');
+               link.download = filename;
+               link.href = url;
+               document.body.appendChild(link);
+               link.click();
+               document.body.removeChild(link);
+               URL.revokeObjectURL(url);
+            }
             
             showToast("Image downloaded successfully!");
         } catch (e) {
@@ -396,7 +427,8 @@ const App: React.FC = () => {
         setState(prev => ({ ...prev, filename: savedFilename }));
       }
       showToast("Project saved successfully!");
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === 'AbortError') return; // User cancelled, ignore
       console.error("Save failed", e);
       showToast("Failed to save project.", true);
     }
@@ -416,7 +448,8 @@ const App: React.FC = () => {
         setState(prev => ({ ...prev, filename: savedFilename }));
       }
       showToast("NGL data saved!");
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === 'AbortError') return; // User cancelled
       console.error("Save failed", e);
       showToast("Failed to save NGL data.", true);
     }
@@ -511,6 +544,20 @@ const App: React.FC = () => {
                   <p className="text-slate-400 text-sm text-center mb-6">Choose how you want to save your work.</p>
                   
                   <div className="grid gap-4">
+
+                      <button 
+                        onClick={executeSaveNGL}
+                        className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-orange-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left"
+                      >
+                          <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-orange-500/20 group-hover:text-orange-400 transition-colors">
+                            <FileJsonIcon />
+                          </div>
+                          <div>
+                              <h4 className="font-bold text-slate-200 group-hover:text-white">Save Raw Data (.ngl)</h4>
+                              <p className="text-xs text-slate-400 mt-1">Saves a compressed data file. Pick up from where you left any time!</p>
+                          </div>
+                      </button>
+
                       <button 
                         onClick={executeSaveProject}
                         className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-orange-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left"
@@ -520,7 +567,7 @@ const App: React.FC = () => {
                           </div>
                           <div>
                               <h4 className="font-bold text-slate-200 group-hover:text-white">Save Project (.png)</h4>
-                              <p className="text-xs text-slate-400 mt-1">Saves an editable file containing all layers and data. Use this to continue editing later.</p>
+                              <p className="text-xs text-slate-400 mt-1">Saves an editable file containing the image and all your edits. Big file!</p>
                           </div>
                       </button>
 
@@ -537,18 +584,6 @@ const App: React.FC = () => {
                           </div>
                       </button>
 
-                      <button 
-                        onClick={executeSaveNGL}
-                        className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-orange-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left"
-                      >
-                          <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-orange-500/20 group-hover:text-orange-400 transition-colors">
-                            <FileJsonIcon />
-                          </div>
-                          <div>
-                              <h4 className="font-bold text-slate-200 group-hover:text-white">Save Raw Data (.ngl)</h4>
-                              <p className="text-xs text-slate-400 mt-1">Saves a compressed JSON file containing all project data.</p>
-                          </div>
-                      </button>
                   </div>
 
                   <button 
@@ -812,7 +847,7 @@ const App: React.FC = () => {
           </div>
         )}
         
-        <div className="absolute bottom-4 right-4 text-[10px] text-slate-600 pointer-events-none select-none font-mono">
+        <div className="absolute bottom-1 right-2 text-[10px] text-slate-500/80 pointer-events-none select-none font-mono z-0">
            POWERED BY GEMINI 3 PRO
         </div>
       </main>

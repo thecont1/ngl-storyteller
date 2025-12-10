@@ -18,6 +18,7 @@ const generateFilename = (extension: string, stateFilename?: string): string => 
 /**
  * Saves the project as a Polyglot PNG.
  * The file is a valid PNG image (for Finder thumbnails) with the compressed project data appended to the end.
+ * Uses File System Access API if available to prompt for overwrite.
  */
 export const saveProject = async (state: AppState, imageBlob: Blob): Promise<string> => {
   let filename = generateFilename('.png', state.filename);
@@ -43,14 +44,38 @@ export const saveProject = async (state: AppState, imageBlob: Blob): Promise<str
   const compressedStateBlob = await new Response(compressedReadableStream).blob();
 
   // 3. Create Separator
-  // We use a specific string sequence to mark where the image ends and data begins
   const separatorBlob = new Blob([SEPARATOR]);
 
   // 4. Combine: [Image PNG] + [Separator] + [Compressed Data]
-  // OS Image viewers stop reading after the PNG IEND chunk, so the extra data is ignored visually but preserved physically.
   const finalBlob = new Blob([imageBlob, separatorBlob, compressedStateBlob], { type: 'image/png' });
 
-  // 5. Download
+  // 5. Save using File System Access API if available
+  let saved = false;
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{
+          description: 'NGL Project File',
+          accept: { 'image/png': ['.png'] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(finalBlob);
+      await writable.close();
+      return handle.name;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw err; // User cancelled, propagate abort
+      }
+      // Suppress cross-origin/iframe security errors, silently fall back
+      if (err.name !== 'SecurityError' && !err.message?.includes('Cross origin')) {
+         console.warn("File System Access API failed, falling back to download link", err);
+      }
+    }
+  }
+
+  // 6. Fallback Download (if API unavailable or failed)
   const url = URL.createObjectURL(finalBlob);
   const link = document.createElement('a');
   link.href = url;
@@ -89,8 +114,31 @@ export const saveProjectNGL = async (state: AppState): Promise<string> => {
   const compressedReadableStream = stream.pipeThrough(new CompressionStream('gzip'));
   const compressedBlob = await new Response(compressedReadableStream).blob();
 
+  // Save using File System Access API if available
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{
+          description: 'NGL Raw Data',
+          accept: { 'application/json': ['.ngl'] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(compressedBlob);
+      await writable.close();
+      return handle.name;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw err; // User cancelled
+      }
+      if (err.name !== 'SecurityError' && !err.message?.includes('Cross origin')) {
+        console.warn("File System Access API failed, falling back to download link", err);
+      }
+    }
+  }
+
   const url = URL.createObjectURL(compressedBlob);
-  
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
@@ -129,9 +177,7 @@ export const loadProject = async (file: File): Promise<AppState> => {
           let foundIndex = -1;
           
           // Search for the separator sequence
-          // Optimization: Search from the end backwards could be faster, but forward is safer for varied file structures
           for(let i = 0; i < uint8.length - separatorBytes.length; i++) {
-              // Quick check first byte
               if (uint8[i] === separatorBytes[0]) {
                   let match = true;
                   for(let j = 1; j < separatorBytes.length; j++) {
@@ -148,7 +194,6 @@ export const loadProject = async (file: File): Promise<AppState> => {
           }
 
           if (foundIndex !== -1) {
-              // Extract data after separator
               const dataStart = foundIndex + separatorBytes.length;
               const dataBytes = uint8.slice(dataStart);
               const dataBlob = new Blob([dataBytes]);
@@ -158,18 +203,13 @@ export const loadProject = async (file: File): Promise<AppState> => {
           }
 
       } else if (file.name.endsWith('.ngl')) {
-          // Compressed Format
           jsonString = await decompressBlob(file);
       } else if (file.name.endsWith('.json')) {
-          // Legacy Plaintext JSON
           jsonString = await file.text();
       } else {
-          // Not a recognizable project file.
-          // Throw immediately so we don't try to JSON.parse binary data (like JPGs)
           throw new Error("File format not recognized as project.");
       }
 
-      // Parse and Validate
       const projectData = JSON.parse(jsonString);
       
       if (!projectData.items || !Array.isArray(projectData.items)) {
@@ -185,9 +225,6 @@ export const loadProject = async (file: File): Promise<AppState> => {
       };
 
   } catch (error) {
-    // We suppress the console error here because it's normal for users to drop
-    // regular JPGs/PNGs, which triggers this error before falling back to the image loader.
-    // console.error("Load failed:", error);
     throw error;
   }
 };

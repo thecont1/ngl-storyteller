@@ -17,16 +17,56 @@ export const MagicIcon = () => (
 
 export const TrashIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18" />
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    <path d="M4 6h16" />
+    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    <path d="M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6" />
+    <line x1="10" y1="10" x2="10" y2="18" />
+    <line x1="14" y1="10" x2="14" y2="18" />
   </svg>
 );
 
-export const GeminiIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 2L14.4 7.2C14.7 7.9 15.3 8.5 16 8.8L21.2 11.2C21.6 11.4 21.6 12 21.2 12.2L16 14.6C15.3 14.9 14.7 15.5 14.4 16.2L12 21.4C11.8 21.8 11.2 21.8 11 21.4L8.6 16.2C8.3 15.5 7.7 14.9 7 14.6L1.8 12.2C1.4 12 1.4 11.4 1.8 11.2L7 8.8C7.7 8.5 8.3 7.9 8.6 7.2L11 2C11.2 1.6 11.8 1.6 12 2Z" fill="currentColor" fillOpacity="0.2" stroke="currentColor" />
-    <path d="M16 16L17 18.5L19.5 19.5L17 20.5L16 23L15 20.5L12.5 19.5L15 18.5L16 16Z" fill="currentColor" fillOpacity="0.2" stroke="currentColor" />
+export const GeminiIcon = ({ spinning = true }: { spinning?: boolean }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="url(#geminiGradient)"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{
+      animation: spinning ? 'spin 1s linear infinite' : 'none'
+    }}
+  >
+    <defs>
+      <linearGradient id="geminiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#4285f4" />
+        <stop offset="25%" stopColor="#34a853" />
+        <stop offset="50%" stopColor="#fbbc05" />
+        <stop offset="75%" stopColor="#ea4335" />
+        <stop offset="100%" stopColor="#4285f4" />
+      </linearGradient>
+      <linearGradient id="geminiFill" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#4285f4" stopOpacity="0.2" />
+        <stop offset="25%" stopColor="#34a853" stopOpacity="0.2" />
+        <stop offset="50%" stopColor="#fbbc05" stopOpacity="0.2" />
+        <stop offset="75%" stopColor="#ea4335" stopOpacity="0.2" />
+        <stop offset="100%" stopColor="#4285f4" stopOpacity="0.2" />
+      </linearGradient>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </defs>
+    <path
+      d="M12 2L14.4 7.2C14.7 7.9 15.3 8.5 16 8.8L21.2 11.2C21.6 11.4 21.6 12 21.2 12.2L16 14.6C15.3 14.9 14.7 15.5 14.4 16.2L12 21.4C11.8 21.8 11.2 21.8 11 21.4L8.6 16.2C8.3 15.5 7.7 14.9 7 14.6L1.8 12.2C1.4 12 1.4 11.4 1.8 11.2L7 8.8C7.7 8.5 8.3 7.9 8.6 7.2L11 2C11.2 1.6 11.8 1.6 12 2Z"
+      fill="url(#geminiFill)"
+      stroke="url(#geminiGradient)"
+    />
   </svg>
 );
 
@@ -74,9 +114,9 @@ export const SaveDiskIcon = () => (
 
 export const StyleIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 2.69l5.74 5.74-5.74 5.74L6.26 8.43z" />
-    <path d="M18.5 12.55l-5.74 5.74-5.74-5.74" />
-    <path d="M12 22v-3.71" />
+    <path d="M12 3 5 7l7 4 7-4L12 3Z" />
+    <path d="M5 11l7 4 7-4" />
+    <path d="M5 15l7 4 7-4" />
   </svg>
 );
 
@@ -90,9 +130,9 @@ export const ScissorsIcon = () => (
   </svg>
 );
 
-export const FileCodeIcon = () => (
+export const FileJsonIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2Z" />
     <polyline points="14 2 14 8 20 8" />
     <path d="m10 13-2 2 2 2" />
     <path d="m14 17 2-2-2-2" />
@@ -101,19 +141,19 @@ export const FileCodeIcon = () => (
 
 export const FileImageIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2Z" />
     <polyline points="14 2 14 8 20 8" />
-    <circle cx="10" cy="13" r="2" />
-    <path d="m20 17-1.09-2.18a2 2 0 0 0-2.73-.55L15 15" />
+    <circle cx="10" cy="10" r="1.7" />
+    <path d="M7 18l3.2-3.2L13 18l2.2-2.2L19 18" />
   </svg>
 );
 
-export const FileJsonIcon = () => (
+export const FileCodeIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2Z" />
     <polyline points="14 2 14 8 20 8" />
-    <path d="M8 13c.5-1 2-1 2.5 0" />
-    <path d="M12 13c.5-1 2-1 2.5 0" />
-    <path d="M10 16.5c1 1 3 1 4 0" />
+    <path d="M9 12.5c-.8.3-1.2.9-1.2 1.7v1.6c0 .8-.4 1.4-1.2 1.7" />
+    <path d="M15 12.5c.8.3 1.2.9 1.2 1.7v1.6c0 .8.4 1.4 1.2 1.7" />
+    <line x1="10" y1="13" x2="14" y2="13" />
   </svg>
 );
