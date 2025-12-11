@@ -64,6 +64,8 @@ export interface AppState {
   filename?: string; // Persist the filename across saves
   thumbnail?: string; // Embedded base64 thumbnail of the project
   canvasDimensions?: { width: number; height: number }; // The natural dimensions of the base image
+  hasBorder?: boolean; // Toggle for white border around canvas
+  caption?: string; // Generated caption for the image
 }
 
 // Extend Window interface for AI Studio API and File System Access API
@@ -88,13 +90,12 @@ declare global {
   }
 
   interface AIStudio {
-    // Methods are likely defined in the global environment already.
-    // Redeclaring them here causes duplicate identifier errors.
-    // hasSelectedApiKey(): Promise<boolean>;
-    // openSelectKey(): Promise<void>;
+    hasSelectedApiKey(): Promise<boolean>;
+    openSelectKey(): Promise<void>;
   }
 
   interface Window {
+    aistudio?: AIStudio;
     showSaveFilePicker?: (options?: {
       suggestedName?: string;
       types?: {

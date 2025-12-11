@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
  * Uses Gemini to extract the significant object from an image.
  * Strategy: Ask Gemini for a binary mask (Black and White).
  */
-export const extractObjectFromImage = async (base64Image: string): Promise<string> => {
+export const extractObjectFromImage = async (base64Image: string): Promise<{ result: string, usage: any }> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const base64Data = base64Image.split(',')[1];
@@ -25,6 +25,11 @@ export const extractObjectFromImage = async (base64Image: string): Promise<strin
     const candidates = response.candidates;
     if (!candidates || candidates.length === 0) throw new Error("No response from Gemini");
 
+    // Log usage metadata if available
+    if (response.usageMetadata) {
+        console.log("Gemini Usage:", response.usageMetadata);
+    }
+
     const parts = candidates[0].content.parts;
     let resultImageBase64 = '';
 
@@ -37,7 +42,7 @@ export const extractObjectFromImage = async (base64Image: string): Promise<strin
 
     if (!resultImageBase64) throw new Error("Gemini did not return an image mask.");
 
-    return resultImageBase64;
+    return { result: resultImageBase64, usage: response.usageMetadata };
   } catch (error) {
     console.error("Gemini Extraction Error:", error);
     throw error;
@@ -92,7 +97,7 @@ function getOrientationDescription(width: number, height: number): string {
  * using 11 reference paintings for authentic style transfer.
  * Output maintains the same aspect ratio and orientation as the input collage.
  */
-export const transformToMagritteStyle = async (base64Image: string): Promise<string> => {
+export const transformToMagritteStyle = async (base64Image: string): Promise<{ result: string, usage: any }> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const base64Data = base64Image.split(',')[1];
@@ -223,6 +228,11 @@ The 11 provided reference paintings (in order after this prompt) are:
     const candidates = response.candidates;
     if (!candidates || candidates.length === 0) throw new Error("No response from Gemini");
 
+    // Log usage metadata if available
+    if (response.usageMetadata) {
+        console.log("Gemini Usage (Magritte):", response.usageMetadata);
+    }
+
     const responseParts = candidates[0].content.parts;
     let resultImageBase64 = '';
 
@@ -239,9 +249,71 @@ The 11 provided reference paintings (in order after this prompt) are:
     const outputDims = await getImageDimensions(resultImageBase64);
     console.log(`Output: ${outputDims.width}×${outputDims.height}`);
 
-    return resultImageBase64;
+    return { result: resultImageBase64, usage: response.usageMetadata };
   } catch (error) {
     console.error("Gemini Magritte Transformation Error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Uses Gemini to generate a witty, surreal caption for the image.
+ */
+export const generateCaption = async (base64Image: string): Promise<{ result: string, usage: any }> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const base64Data = base64Image.split(',')[1];
+    const mimeType = base64Image.substring(base64Image.indexOf(':') + 1, base64Image.indexOf(';'));
+
+    const model = 'gemini-3-pro-preview'; // Use text/multimodal model
+
+    const prompt = `You are a sharp, empathetic caption writer for surrealistic images.
+Your job: look closely at the image, infer what mood or message the creator might be expressing, and write one short, punchy caption.
+
+Follow these rules:
+
+- First, in your head, parse the scene: main subjects, odd or funny juxtapositions, any tension between expectation and reality, and clues about place (often Indian urban or small-town life), class, aspiration, or online culture.
+
+- Then infer the likely emotional subtext (for example: frustration with infrastructure, absurdity of commuting, nostalgia, social anxiety, FOMO, romantic drama, family pressure, etc.).
+
+- Finally, write a single caption that:
+    - is at most 20 words
+    - uses casual social-media English (can mix Hinglish if it fits naturally)
+    - is indirect and witty rather than literal; do not describe the objects in the image
+    - avoids slang that is too specific to one region unless it clearly matches the vibe
+    - avoids hashtags and emojis unless they genuinely strengthen the joke or feeling
+    - stays kind; no cruelty toward people, communities, or body types.
+
+Output format:
+- One line with the final caption only.
+- No explanation, no analysis, no extra text.
+
+If you are unsure of the exact intent, choose the most relatable, emotionally resonant angle instead of a literal description.`;
+
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: {
+        parts: [
+          { inlineData: { mimeType: mimeType, data: base64Data } },
+          { text: prompt }
+        ]
+      }
+    });
+
+    const candidates = response.candidates;
+    if (!candidates || candidates.length === 0) throw new Error("No response from Gemini");
+
+    // Log usage metadata if available
+    if (response.usageMetadata) {
+        console.log("Gemini Usage (Caption):", response.usageMetadata);
+    }
+
+    const caption = candidates[0].content.parts[0].text;
+    if (!caption) throw new Error("Gemini did not return a caption.");
+
+    return { result: caption.trim(), usage: response.usageMetadata };
+  } catch (error) {
+    console.error("Gemini Caption Generation Error:", error);
     throw error;
   }
 };

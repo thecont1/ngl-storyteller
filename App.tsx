@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { Canvas } from './components/Canvas';
-import { extractObjectFromImage, transformToMagritteStyle } from './services/geminiService';
+import { extractObjectFromImage, transformToMagritteStyle, generateCaption } from './services/geminiService';
 import { applyMask, analyzeImageContent, loadImage, calculateInitialSize, fileToBase64 } from './utils/imageUtils';
 import { saveProject, loadProject, saveProjectNGL } from './utils/projectUtils';
 import { CollageItem, AppState, LayerStyle } from './types';
-import { TrashIcon, InvertIcon, MirrorIcon, GripVerticalIcon, StyleIcon, ScissorsIcon, GeminiIcon, SaveDiskIcon, FileImageIcon, FileCodeIcon, FileJsonIcon, MagritteIcon } from './components/Icons';
+import { TrashIcon, InvertIcon, MirrorIcon, GripVerticalIcon, StyleIcon, ScissorsIcon, GeminiIcon, SaveDiskIcon, FileImageIcon, FileCodeIcon, FileJsonIcon, MagritteIcon, SparklesIcon } from './components/Icons';
 import { Logo } from './components/Logo';
 import html2canvas from 'html2canvas';
 
@@ -14,6 +14,9 @@ const App: React.FC = () => {
   const [apiKeyLoading, setApiKeyLoading] = useState<boolean>(true);
   const [notification, setNotification] = useState<{message: string, isError: boolean} | null>(null);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [isProcessingCaption, setIsProcessingCaption] = useState(false);
+  const [isProcessingMagritte, setIsProcessingMagritte] = useState(false);
+  const [totalCost, setTotalCost] = useState<number>(0);
 
   const [state, setState] = useState<AppState>({
     baseImage: null,
@@ -22,7 +25,9 @@ const App: React.FC = () => {
     isExporting: false,
     filename: undefined,
     thumbnail: undefined,
-    canvasDimensions: undefined
+    canvasDimensions: undefined,
+    hasBorder: false,
+    caption: undefined
   });
 
   const exportContainerRef = useRef<HTMLDivElement>(null);
@@ -82,6 +87,23 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, canvasDimensions: { width, height } }));
   };
 
+  const updateCost = (usage: any) => {
+      if (!usage) return;
+      // Pricing for Gemini 1.5 Pro (approximate, as 3-pro-preview pricing might vary)
+      // Input: $3.50 / 1M tokens
+      // Output: $10.50 / 1M tokens
+      // Images: $0.002625 / image (approx token equivalent)
+      
+      // Simplified calculation based on token counts if available
+      const inputTokens = usage.promptTokenCount || 0;
+      const outputTokens = usage.candidatesTokenCount || 0;
+      
+      const inputCost = (inputTokens / 1000000) * 3.50;
+      const outputCost = (outputTokens / 1000000) * 10.50;
+      
+      setTotalCost(prev => prev + inputCost + outputCost);
+  };
+
   const processLayer = async (itemId: string, originalSrc: string) => {
     setState(prev => ({
       ...prev,
@@ -89,7 +111,17 @@ const App: React.FC = () => {
     }));
 
     try {
-      const aiResponseImage = await extractObjectFromImage(originalSrc);
+      // We need to modify extractObjectFromImage to return usage data or handle it globally
+      // For now, we'll assume the service logs it and we might need a way to bubble it up.
+      // Since I can't easily change the return signature of everything without breaking types,
+      // I'll rely on the console logs I added or a custom event if I were architecting from scratch.
+      // BUT, I can modify the service to return an object { result, usage } and update callsites.
+      // Let's do that in a follow-up if needed, but for now let's try to capture it.
+      
+      // Actually, let's update the service to return usage.
+      const { result: aiResponseImage, usage } = await extractObjectFromImage(originalSrc);
+      updateCost(usage);
+
       const { isMask } = await analyzeImageContent(aiResponseImage);
       
       let processedImage = aiResponseImage;
@@ -292,7 +324,7 @@ const App: React.FC = () => {
             const canvas = await html2canvas(exportContainerRef.current, {
                 useCORS: true,
                 backgroundColor: null,
-                scale: 1, 
+                scale: 1,
                 onclone: (clonedDoc) => {
                     const clonedExportDiv = clonedDoc.getElementById('canvas-export-div');
                     if (clonedExportDiv) {
@@ -301,6 +333,14 @@ const App: React.FC = () => {
                         clonedExportDiv.style.left = 'auto';
                         clonedExportDiv.style.top = 'auto';
                         
+                        // Ensure caption is visible in export if it exists
+                        const captionEl = clonedExportDiv.querySelector('.canvas-caption');
+                        if (captionEl) {
+                            (captionEl as HTMLElement).style.display = 'flex';
+                            // Force white background on export
+                            (captionEl as HTMLElement).style.backgroundColor = 'white';
+                        }
+
                         // FIX: Remove animation grain/dimness from base image during export
                         const baseImg = clonedExportDiv.querySelector('#canvas-base-image');
                         if (baseImg) {
@@ -390,31 +430,39 @@ const App: React.FC = () => {
 
       const canvas = await html2canvas(exportContainerRef.current, {
           useCORS: true,
-          backgroundColor: '#020617', 
-          scale: 1, 
+          backgroundColor: '#020617',
+          scale: 1,
           logging: false,
           onclone: (clonedDoc) => {
-             const clonedExportDiv = clonedDoc.getElementById('canvas-export-div');
-             if (clonedExportDiv) {
-                 clonedExportDiv.style.transform = 'none';
-                 clonedExportDiv.style.position = 'static';
-                 clonedExportDiv.style.left = 'auto';
-                 clonedExportDiv.style.top = 'auto';
+              const clonedExportDiv = clonedDoc.getElementById('canvas-export-div');
+              if (clonedExportDiv) {
+                  clonedExportDiv.style.transform = 'none';
+                  clonedExportDiv.style.position = 'static';
+                  clonedExportDiv.style.left = 'auto';
+                  clonedExportDiv.style.top = 'auto';
 
-                 // FIX: Remove animation grain/dimness from base image during export
-                 const baseImg = clonedExportDiv.querySelector('#canvas-base-image');
-                 if (baseImg) {
-                     baseImg.classList.remove('animate-grain-reveal');
-                     (baseImg as HTMLElement).style.filter = 'none';
-                     (baseImg as HTMLElement).style.opacity = '1';
-                 }
+                  // Ensure caption is visible in export if it exists
+                  const captionEl = clonedExportDiv.querySelector('.canvas-caption');
+                  if (captionEl) {
+                      (captionEl as HTMLElement).style.display = 'flex';
+                      // Force white background on export
+                      (captionEl as HTMLElement).style.backgroundColor = 'white';
+                  }
 
-                 // FIX: Remove item animations for clean capture
-                 const items = clonedExportDiv.querySelectorAll('[class*="anim-"]');
-                 items.forEach(el => {
-                    el.classList.remove('anim-float-ghost', 'anim-shimmer-fire');
-                 });
-             }
+                  // FIX: Remove animation grain/dimness from base image during export
+                  const baseImg = clonedExportDiv.querySelector('#canvas-base-image');
+                  if (baseImg) {
+                      baseImg.classList.remove('animate-grain-reveal');
+                      (baseImg as HTMLElement).style.filter = 'none';
+                      (baseImg as HTMLElement).style.opacity = '1';
+                  }
+
+                  // FIX: Remove item animations for clean capture
+                  const items = clonedExportDiv.querySelectorAll('[class*="anim-"]');
+                  items.forEach(el => {
+                      el.classList.remove('anim-float-ghost', 'anim-shimmer-fire');
+                  });
+              }
           }
       });
       
@@ -456,10 +504,12 @@ const App: React.FC = () => {
   };
 
   const executeSaveMagritte = async () => {
-    setIsSaveModalOpen(false);
+    // setIsSaveModalOpen(false); // Keep modal open
     if (!exportContainerRef.current) return;
     
-    showToast("Dreaming up a masterpiece... this may take a moment.", false);
+    setIsProcessingMagritte(true);
+    // Keep modal open while processing
+    // showToast("Dreaming up a masterpiece... this may take a moment.", false);
 
     selectItem(null);
     setTimeout(async () => {
@@ -470,7 +520,7 @@ const App: React.FC = () => {
             const canvas = await html2canvas(exportContainerRef.current, {
                 useCORS: true,
                 backgroundColor: null,
-                scale: 1, 
+                scale: 1,
                 onclone: (clonedDoc) => {
                     const clonedExportDiv = clonedDoc.getElementById('canvas-export-div');
                     if (clonedExportDiv) {
@@ -479,6 +529,14 @@ const App: React.FC = () => {
                         clonedExportDiv.style.left = 'auto';
                         clonedExportDiv.style.top = 'auto';
                         
+                        // Ensure caption is visible in export if it exists
+                        const captionEl = clonedExportDiv.querySelector('.canvas-caption');
+                        if (captionEl) {
+                            (captionEl as HTMLElement).style.display = 'flex';
+                            // Force white background on export
+                            (captionEl as HTMLElement).style.backgroundColor = 'white';
+                        }
+
                         const baseImg = clonedExportDiv.querySelector('#canvas-base-image');
                         if (baseImg) {
                             baseImg.classList.remove('animate-grain-reveal');
@@ -498,7 +556,8 @@ const App: React.FC = () => {
             const base64 = canvas.toDataURL('image/jpeg', 0.9);
 
             // 3. Transform via Gemini
-            const transformedBase64 = await transformToMagritteStyle(base64);
+            const { result: transformedBase64, usage } = await transformToMagritteStyle(base64);
+            updateCost(usage);
 
             // 4. Convert to Blob for saving
             const res = await fetch(transformedBase64);
@@ -546,10 +605,69 @@ const App: React.FC = () => {
                URL.revokeObjectURL(url);
             }
             
+            setIsSaveModalOpen(false); // Close modal only after success
             showToast("Surrealist masterpiece saved!");
         } catch (e) {
             console.error("Magritte transformation failed", e);
             showToast("Failed to create Magritte style image. Try again.", true);
+            // Keep modal open on error so user can retry
+        } finally {
+            setIsProcessingMagritte(false);
+        }
+    }, 100);
+  };
+
+  const executeGenerateCaption = async () => {
+    if (!exportContainerRef.current) return;
+    
+    setIsProcessingCaption(true);
+    showToast("Reading the vibes... 🔮", false);
+
+    selectItem(null);
+    setTimeout(async () => {
+        try {
+            if(!exportContainerRef.current) return;
+            
+            // 1. Capture Canvas cleanly (without existing caption if any)
+            const canvas = await html2canvas(exportContainerRef.current, {
+                useCORS: true,
+                backgroundColor: null,
+                scale: 0.5, // Lower scale for faster processing, we just need context
+                onclone: (clonedDoc) => {
+                    const clonedExportDiv = clonedDoc.getElementById('canvas-export-div');
+                    if (clonedExportDiv) {
+                        clonedExportDiv.style.transform = 'none';
+                        clonedExportDiv.style.position = 'static';
+                        clonedExportDiv.style.left = 'auto';
+                        clonedExportDiv.style.top = 'auto';
+                        
+                        // Hide any existing caption during capture
+                        const captionEl = clonedExportDiv.querySelector('.canvas-caption');
+                        if (captionEl) {
+                            (captionEl as HTMLElement).style.display = 'none';
+                        }
+                    }
+                }
+            });
+            
+            const base64 = canvas.toDataURL('image/jpeg', 0.8);
+            const { result: caption, usage } = await generateCaption(base64);
+            updateCost(usage);
+            
+            console.log("Generated Caption:", caption); // Feedback for debugging
+
+            setState(prev => ({
+                ...prev,
+                caption: caption,
+                hasBorder: true // Auto-enable border
+            }));
+            
+            showToast(`Caption generated: "${caption.substring(0, 30)}${caption.length > 30 ? '...' : ''}"`);
+        } catch (e) {
+            console.error("Caption generation failed", e);
+            showToast("Failed to generate caption. Try again.", true);
+        } finally {
+            setIsProcessingCaption(false);
         }
     }, 100);
   };
@@ -684,15 +802,18 @@ const App: React.FC = () => {
                           </div>
                       </button>
 
-                      <button 
+                      <button
                         onClick={executeSaveMagritte}
-                        className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-blue-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left"
+                        disabled={isProcessingMagritte}
+                        className="group flex items-start gap-4 p-4 rounded-xl border border-slate-600 hover:border-blue-500 bg-slate-700/50 hover:bg-slate-700 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                            <div className="p-3 bg-slate-800 rounded-lg group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors">
-                            <MagritteIcon />
+                            <GeminiIcon spinning={isProcessingMagritte} />
                           </div>
                           <div>
-                              <h4 className="font-bold text-slate-200 group-hover:text-white">Surrealist (Magritte)</h4>
+                              <h4 className="font-bold text-slate-200 group-hover:text-white">
+                                  {isProcessingMagritte ? 'Dreaming...' : 'Save as Magritte'}
+                              </h4>
                               <p className="text-xs text-slate-400 mt-1">Reimagine your scene in the style of René Magritte using GenAI.</p>
                           </div>
                       </button>
@@ -713,7 +834,13 @@ const App: React.FC = () => {
       <aside className="w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
         {/* Sidebar Header with Logo and Project Controls */}
         <div className="p-6 border-b border-slate-800 flex flex-col gap-4">
-           <Logo />
+           <div className="flex items-start justify-between">
+               <Logo />
+               <div className="flex flex-col items-end">
+                   <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Session Cost</span>
+                   <span className="text-sm font-mono text-emerald-400 font-bold">${totalCost.toFixed(4)}</span>
+               </div>
+           </div>
            <div className="flex items-center justify-between">
               <p className="text-sm text-slate-500 font-['Chewy'] tracking-wide text-lg text-amber-500/80 -mt-1 ml-14">
                 Based on a true story 😜
@@ -729,19 +856,45 @@ const App: React.FC = () => {
             </h2>
             
             {state.baseImage ? (
-                <div className="space-y-3">
-                    <div className="rounded-lg overflow-hidden border border-slate-700 aspect-video bg-black relative group shadow-md">
-                        <img src={state.baseImage} alt="Base" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                             <ImageUploader 
-                                id="base-change"
-                                label="Change Image" 
-                                onUpload={handleBaseImageUpload} 
-                             />
-                        </div>
-                    </div>
-                </div>
-            ) : (
+               <div className="space-y-3">
+                   <div className="rounded-lg overflow-hidden border border-slate-700 aspect-video bg-black relative group shadow-md">
+                       <img src={state.baseImage} alt="Base" className="w-full h-full object-cover" />
+                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <ImageUploader
+                               id="base-change"
+                               label="Change Image"
+                               onUpload={handleBaseImageUpload}
+                            />
+                       </div>
+                   </div>
+                   
+                   {/* Border Toggle / Remove Caption */}
+                   <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
+                       <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                           {state.caption ? 'Remove Caption' : 'Add Border'}
+                       </span>
+                       <button
+                           onClick={() => {
+                               if (state.caption) {
+                                   // If caption exists, remove it and keep border on (or toggle border? User said "Remove Caption")
+                                   // "If the user 'removes caption', then it changes back to 'add border'"
+                                   // This implies removing caption resets state to just border (or no border?)
+                                   // Let's assume it removes caption but keeps border, or maybe removes both?
+                                   // "If border is off, then turn it on... If the user 'removes caption', then it changes back to 'add border'"
+                                   // This suggests the toggle becomes a "Remove Caption" button.
+                                   setState(prev => ({ ...prev, caption: undefined }));
+                               } else {
+                                   setState(prev => ({ ...prev, hasBorder: !prev.hasBorder }));
+                               }
+                           }}
+                           className={`w-10 h-5 rounded-full relative transition-colors duration-200 ease-in-out ${state.hasBorder || state.caption ? 'bg-orange-500' : 'bg-slate-600'}`}
+                       >
+                           <span className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-sm transform transition-transform duration-200 ${state.hasBorder || state.caption ? 'translate-x-5' : 'translate-x-0'}`} />
+                       </button>
+                   </div>
+
+               </div>
+           ) : (
                 <ImageUploader 
                   id="base-upload"
                   label="Upload Landscape" 
@@ -759,8 +912,8 @@ const App: React.FC = () => {
               </h2>
               
               {/* 1. Object Settings (If Selected) */}
-              {selectedItem && !selectedItem.isProcessing && (
-                <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 mb-6 shadow-lg">
+              {selectedItem && (
+                <div className={`bg-slate-800 rounded-lg p-4 border border-slate-700 mb-6 shadow-lg ${selectedItem.isProcessing ? 'opacity-90' : ''}`}>
                   <div className="flex items-center justify-between mb-3">
                       <h3 className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Settings</h3>
                       <span className="text-xs text-amber-400 font-mono font-bold">{selectedItem.name}</span>
@@ -775,9 +928,10 @@ const App: React.FC = () => {
                         {styles.map(s => (
                             <button
                                 key={s.id}
+                                disabled={selectedItem.isProcessing}
                                 onClick={() => updateItem(selectedItem.id, { style: s.id })}
-                                className={`text-[10px] py-1.5 px-1 rounded font-medium border transition-all
-                                   ${selectedItem.style === s.id 
+                                className={`text-[10px] py-1.5 px-1 rounded font-medium border transition-all disabled:opacity-50 disabled:cursor-not-allowed
+                                   ${selectedItem.style === s.id
                                      ? 'bg-orange-500/20 border-orange-500 text-orange-200' 
                                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-700'
                                    }
@@ -793,8 +947,9 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-700">
                         {/* Row 1: Mirror & Mask */}
                         <button
+                            disabled={selectedItem.isProcessing}
                             onClick={() => updateItem(selectedItem.id, { isMirrored: !selectedItem.isMirrored })}
-                            className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border ${selectedItem.isMirrored ? 'bg-slate-700 border-orange-500/50 text-orange-400' : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-200'}`}
+                            className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border disabled:opacity-50 disabled:cursor-not-allowed ${selectedItem.isMirrored ? 'bg-slate-700 border-orange-500/50 text-orange-400' : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-200'}`}
                             title="Flip Horizontal"
                           >
                             <MirrorIcon />
@@ -802,9 +957,10 @@ const App: React.FC = () => {
                         </button>
                         
                         <button
+                          disabled={selectedItem.isProcessing}
                           onClick={() => updateItem(selectedItem.id, { showCutout: !selectedItem.showCutout })}
-                          className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border ${
-                              selectedItem.showCutout 
+                          className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border disabled:opacity-50 disabled:cursor-not-allowed ${
+                              selectedItem.showCutout
                                   ? 'bg-slate-700 border-orange-500/50 text-orange-400' 
                                   : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
                           }`}
@@ -815,9 +971,10 @@ const App: React.FC = () => {
 
                         {/* Row 2: Invert & Delete */}
                         <button
+                          disabled={selectedItem.isProcessing}
                           onClick={() => updateCompositing(selectedItem.id, !selectedItem.invertMask)}
-                          className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border ${
-                              selectedItem.invertMask 
+                          className={`p-2 rounded-md transition-all flex items-center justify-center gap-2 border disabled:opacity-50 disabled:cursor-not-allowed ${
+                              selectedItem.invertMask
                                   ? 'bg-slate-700 border-orange-500/50 text-orange-400' 
                                   : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
                           }`}
@@ -826,21 +983,23 @@ const App: React.FC = () => {
                           <span className="text-[10px] font-medium">Invert</span>
                         </button>
 
-                        <button 
+                        <button
+                          disabled={selectedItem.isProcessing}
                           onClick={() => removeItem(selectedItem.id)}
-                          className="p-2 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
+                          className="p-2 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-red-400 hover:bg-red-500/10 hover:border-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <TrashIcon />
                           <span className="text-[10px] font-medium">Delete</span>
                         </button>
 
                         {/* Row 3: Retry (Wide) */}
-                        <button 
+                        <button
+                          disabled={selectedItem.isProcessing}
                           onClick={(e) => handleRetry(selectedItem.id, e)}
-                          className="col-span-2 p-3 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white hover:border-slate-500 mt-1 group"
+                          className="col-span-2 p-3 rounded-md transition-all flex items-center justify-center gap-2 border bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white hover:border-slate-500 mt-1 group disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                           <div className="group-hover:text-blue-400 transition-colors">
-                              <GeminiIcon />
+                              <GeminiIcon spinning={selectedItem.isProcessing} />
                           </div>
                           <span className="text-[11px] font-bold uppercase tracking-wider">Retry Extraction</span>
                         </button>
@@ -905,13 +1064,25 @@ const App: React.FC = () => {
 
         </div>
 
-        <div className="p-6 border-t border-slate-800 bg-slate-900">
-           <button 
+        <div className="p-6 border-t border-slate-800 bg-slate-900 space-y-3">
+           {/* Caption Generator */}
+           {state.baseImage && (
+               <button
+                   onClick={executeGenerateCaption}
+                   disabled={isProcessingCaption}
+                   className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded-lg text-slate-300 hover:text-white font-bold text-xs uppercase tracking-wide flex items-center justify-center gap-2 transition-all"
+               >
+                   <GeminiIcon spinning={isProcessingCaption} />
+                   {isProcessingCaption ? 'Generating...' : 'Generate Caption'}
+               </button>
+           )}
+
+           <button
              onClick={openSaveModal}
-             disabled={!state.baseImage}
+             disabled={!state.baseImage || isProcessingCaption || isProcessingMagritte}
              className={`w-full py-3 px-4 rounded-lg font-bold text-sm uppercase tracking-wide flex items-center justify-center gap-2 transition-all transform active:scale-95
-               ${state.baseImage 
-                 ? 'bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 shadow-lg shadow-orange-500/20 text-white' 
+               ${state.baseImage && !isProcessingCaption && !isProcessingMagritte
+                 ? 'bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 shadow-lg shadow-orange-500/20 text-white'
                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
            >
              <SaveDiskIcon />
@@ -935,7 +1106,7 @@ const App: React.FC = () => {
         )}
 
         {state.baseImage ? (
-           <Canvas 
+           <Canvas
              baseImage={state.baseImage}
              items={state.items}
              selectedItemId={state.selectedItemId}
@@ -944,6 +1115,8 @@ const App: React.FC = () => {
              onRemoveItem={removeItem}
              onDimensionsLoaded={handleCanvasDimensions}
              exportRef={exportContainerRef}
+             hasBorder={state.hasBorder}
+             caption={state.caption}
            />
         ) : (
           /* Empty State / Welcome Splash / Drop Zone */
