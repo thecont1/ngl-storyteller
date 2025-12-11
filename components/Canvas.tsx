@@ -13,23 +13,144 @@ interface CanvasProps {
   exportRef: React.MutableRefObject<HTMLDivElement | null>;
 }
 
+interface InitialItemState {
+  pos: Position;
+  size: { width: number; height: number };
+  rotation: number;
+  crop: { top: number; bottom: number; left: number; right: number };
+}
+
+const calculateDragUpdate = (
+  initialState: InitialItemState,
+  dx: number,
+  dy: number
+) => {
+  return {
+    position: {
+      x: initialState.pos.x + dx,
+      y: initialState.pos.y + dy
+    }
+  };
+};
+
+const calculateRotationUpdate = (
+  e: MouseEvent,
+  initialState: InitialItemState,
+  scale: number,
+  canvasElement: HTMLDivElement
+) => {
+  // 1. Item Pos relative to canvas top-left (unscaled)
+  const visW_pct = (100 - initialState.crop.left - initialState.crop.right) / 100;
+  const visH_pct = (100 - initialState.crop.top - initialState.crop.bottom) / 100;
+  const offX = initialState.size.width * (initialState.crop.left / 100);
+  const offY = initialState.size.height * (initialState.crop.top / 100);
+  
+  const itemCenterX_unscaled = initialState.pos.x + offX + (initialState.size.width * visW_pct) / 2;
+  const itemCenterY_unscaled = initialState.pos.y + offY + (initialState.size.height * visH_pct) / 2;
+
+  // 2. Project to screen
+  const canvasRect = canvasElement.getBoundingClientRect();
+  const screenCenterX = canvasRect.left + (itemCenterX_unscaled * scale);
+  const screenCenterY = canvasRect.top + (itemCenterY_unscaled * scale);
+  
+  const angle = Math.atan2(e.clientY - screenCenterY, e.clientX - screenCenterX);
+  const deg = angle * (180 / Math.PI) + 90;
+  
+  return { rotation: deg };
+};
+
+const calculateResizeUpdate = (
+  dragMode: DragMode,
+  dx: number,
+  initialState: InitialItemState
+) => {
+  const aspectRatio = initialState.size.width / initialState.size.height;
+  const visW_pct = (100 - initialState.crop.left - initialState.crop.right) / 100;
+  
+  const scaleX = visW_pct > 0.05 ? 1 / visW_pct : 1;
+  const effectiveDx = dx * scaleX;
+
+  let newWidth = initialState.size.width;
+  let newHeight = initialState.size.height;
+  let newX = initialState.pos.x;
+  let newY = initialState.pos.y;
+
+  switch (dragMode) {
+      case DragMode.RESIZE_TL:
+          newWidth = Math.max(50, initialState.size.width - effectiveDx);
+          newHeight = newWidth / aspectRatio;
+          newX = initialState.pos.x + (initialState.size.width - newWidth);
+          newY = initialState.pos.y + (initialState.size.height - newHeight);
+          break;
+
+      case DragMode.RESIZE_TR:
+          newWidth = Math.max(50, initialState.size.width + effectiveDx);
+          newHeight = newWidth / aspectRatio;
+          newY = initialState.pos.y + (initialState.size.height - newHeight);
+          break;
+
+      case DragMode.RESIZE_BL:
+          newWidth = Math.max(50, initialState.size.width - effectiveDx);
+          newHeight = newWidth / aspectRatio;
+          newX = initialState.pos.x + (initialState.size.width - newWidth);
+          break;
+
+      case DragMode.RESIZE_BR:
+          newWidth = Math.max(50, initialState.size.width + effectiveDx);
+          newHeight = newWidth / aspectRatio;
+          break;
+  }
+
+  return {
+      size: { width: newWidth, height: newHeight },
+      position: { x: newX, y: newY }
+  };
+};
+
+const calculateCropUpdate = (
+  dragMode: DragMode,
+  dx: number,
+  dy: number,
+  initialState: InitialItemState
+) => {
+  const pxToPctX = (val: number) => (val / initialState.size.width) * 100;
+  const pxToPctY = (val: number) => (val / initialState.size.height) * 100;
+
+  let { top, bottom, left, right } = initialState.crop;
+
+  switch(dragMode) {
+      case DragMode.CROP_T:
+          top = Math.min(Math.max(0, initialState.crop.top + pxToPctY(dy)), 90 - initialState.crop.bottom);
+          break;
+      case DragMode.CROP_B:
+          bottom = Math.min(Math.max(0, initialState.crop.bottom - pxToPctY(dy)), 90 - initialState.crop.top);
+          break;
+      case DragMode.CROP_L:
+          left = Math.min(Math.max(0, initialState.crop.left + pxToPctX(dx)), 90 - initialState.crop.right);
+          break;
+      case DragMode.CROP_R:
+          right = Math.min(Math.max(0, initialState.crop.right - pxToPctX(dx)), 90 - initialState.crop.left);
+          break;
+  }
+
+  return {
+      crop: { top, bottom, left, right }
+  };
+};
+
 export const Canvas: React.FC<CanvasProps> = ({
   baseImage,
   items,
   selectedItemId,
   onSelectItem,
+  
   onUpdateItem,
   onDimensionsLoaded,
   exportRef
 }) => {
   const [dragMode, setDragMode] = useState<DragMode>(DragMode.NONE);
   const [startPos, setStartPos] = useState<Position>({ x: 0, y: 0 });
-  const [initialItemState, setInitialItemState] = useState<{ 
-    pos: Position; 
-    size: { width: number; height: number }; 
-    rotation: number;
-    crop: { top: number; bottom: number; left: number; right: number };
-  } | null>(null);
+  const [initialItemState, setInitialItemState] = useState<InitialItemState | null>(null);
 
   // Resolution Independence State
   const [scale, setScale] = useState<number>(1);
@@ -106,114 +227,23 @@ export const Canvas: React.FC<CanvasProps> = ({
     const dy = (e.clientY - startPos.y) / scale;
     
     if (dragMode === DragMode.DRAG) {
-      onUpdateItem(selectedItemId, {
-        position: {
-          x: initialItemState.pos.x + dx,
-          y: initialItemState.pos.y + dy
-        }
-      });
+      onUpdateItem(selectedItemId, calculateDragUpdate(initialItemState, dx, dy));
       return;
     }
 
     if (dragMode === DragMode.ROTATE) {
       if (!exportRef.current) return;
-      
-      // Calculate center of item in SCREEN coordinates
-      // 1. Item Pos relative to canvas top-left (unscaled)
-      const visW_pct = (100 - initialItemState.crop.left - initialItemState.crop.right) / 100;
-      const visH_pct = (100 - initialItemState.crop.top - initialItemState.crop.bottom) / 100;
-      const offX = initialItemState.size.width * (initialItemState.crop.left / 100);
-      const offY = initialItemState.size.height * (initialItemState.crop.top / 100);
-      
-      const itemCenterX_unscaled = initialItemState.pos.x + offX + (initialItemState.size.width * visW_pct) / 2;
-      const itemCenterY_unscaled = initialItemState.pos.y + offY + (initialItemState.size.height * visH_pct) / 2;
-
-      // 2. Project to screen
-      // getBoundingClientRect includes the transform (translate + scale), so left/top are visual screen coords
-      const canvasRect = exportRef.current.getBoundingClientRect();
-      const screenCenterX = canvasRect.left + (itemCenterX_unscaled * scale);
-      const screenCenterY = canvasRect.top + (itemCenterY_unscaled * scale);
-      
-      const angle = Math.atan2(e.clientY - screenCenterY, e.clientX - screenCenterX);
-      const deg = angle * (180 / Math.PI) + 90; 
-      
-      onUpdateItem(selectedItemId, {
-        rotation: deg
-      });
+      onUpdateItem(selectedItemId, calculateRotationUpdate(e, initialItemState, scale, exportRef.current));
       return;
     }
 
-    const aspectRatio = initialItemState.size.width / initialItemState.size.height;
-
     if ([DragMode.RESIZE_TL, DragMode.RESIZE_TR, DragMode.RESIZE_BL, DragMode.RESIZE_BR].includes(dragMode)) {
-        const visW_pct = (100 - initialItemState.crop.left - initialItemState.crop.right) / 100;
-        const visH_pct = (100 - initialItemState.crop.top - initialItemState.crop.bottom) / 100;
-        
-        const scaleX = visW_pct > 0.05 ? 1 / visW_pct : 1;
-        const effectiveDx = dx * scaleX;
-
-        let newWidth = initialItemState.size.width;
-        let newHeight = initialItemState.size.height;
-        let newX = initialItemState.pos.x;
-        let newY = initialItemState.pos.y;
-
-        switch (dragMode) {
-            case DragMode.RESIZE_TL:
-                newWidth = Math.max(50, initialItemState.size.width - effectiveDx);
-                newHeight = newWidth / aspectRatio;
-                newX = initialItemState.pos.x + (initialItemState.size.width - newWidth);
-                newY = initialItemState.pos.y + (initialItemState.size.height - newHeight);
-                break;
-
-            case DragMode.RESIZE_TR:
-                newWidth = Math.max(50, initialItemState.size.width + effectiveDx);
-                newHeight = newWidth / aspectRatio;
-                newY = initialItemState.pos.y + (initialItemState.size.height - newHeight);
-                break;
-
-            case DragMode.RESIZE_BL:
-                newWidth = Math.max(50, initialItemState.size.width - effectiveDx);
-                newHeight = newWidth / aspectRatio;
-                newX = initialItemState.pos.x + (initialItemState.size.width - newWidth);
-                break;
-
-            case DragMode.RESIZE_BR:
-                newWidth = Math.max(50, initialItemState.size.width + effectiveDx);
-                newHeight = newWidth / aspectRatio;
-                break;
-        }
-
-        onUpdateItem(selectedItemId, {
-            size: { width: newWidth, height: newHeight },
-            position: { x: newX, y: newY }
-        });
+        onUpdateItem(selectedItemId, calculateResizeUpdate(dragMode, dx, initialItemState));
         return;
     }
 
     if ([DragMode.CROP_T, DragMode.CROP_B, DragMode.CROP_L, DragMode.CROP_R].includes(dragMode)) {
-        const pxToPctX = (val: number) => (val / initialItemState.size.width) * 100;
-        const pxToPctY = (val: number) => (val / initialItemState.size.height) * 100;
-
-        let { top, bottom, left, right } = initialItemState.crop;
-
-        switch(dragMode) {
-            case DragMode.CROP_T:
-                top = Math.min(Math.max(0, initialItemState.crop.top + pxToPctY(dy)), 90 - initialItemState.crop.bottom);
-                break;
-            case DragMode.CROP_B:
-                bottom = Math.min(Math.max(0, initialItemState.crop.bottom - pxToPctY(dy)), 90 - initialItemState.crop.top);
-                break;
-            case DragMode.CROP_L:
-                left = Math.min(Math.max(0, initialItemState.crop.left + pxToPctX(dx)), 90 - initialItemState.crop.right);
-                break;
-            case DragMode.CROP_R:
-                right = Math.min(Math.max(0, initialItemState.crop.right - pxToPctX(dx)), 90 - initialItemState.crop.left);
-                break;
-        }
-
-        onUpdateItem(selectedItemId, {
-            crop: { top, bottom, left, right }
-        });
+        onUpdateItem(selectedItemId, calculateCropUpdate(dragMode, dx, dy, initialItemState));
     }
 
   }, [dragMode, selectedItemId, startPos, initialItemState, onUpdateItem, scale]);
@@ -236,10 +266,11 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const getFilterClass = (style: LayerStyle) => {
     switch(style) {
-        case 'sticker': return '';
+        case 'sticker': return 'filter-sticker';
         case 'ghost': return 'filter-ghost'; 
         case 'ink': return 'filter-ink';
         case 'pumpkin': return 'filter-pumpkin';
+        case 'manga': return 'filter-manga';
         default: return '';
     }
   };
@@ -300,11 +331,61 @@ export const Canvas: React.FC<CanvasProps> = ({
         className="absolute top-1/2 left-1/2 shadow-2xl bg-black transition-transform duration-200 ease-out overflow-hidden"
         style={canvasStyle}
       >
+        {/* SVG Filters Definition */}
+<svg width="0" height="0">
+  <defs>
+    <filter id="manga-filter" x="-20%" y="-20%" width="140%" height="140%">
+      {/* 1. Surface Smoothing: Flattens photo textures */}
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.5" result="soft" />
+
+      {/* 2. Posterization: Creates cel-shaded look */}
+      <feComponentTransfer in="soft" result="poster">
+        <feFuncR type="discrete" tableValues="0.00 0.03 0.06 0.10 0.13 0.16 0.19 0.23 0.26 0.29 0.32 0.35 0.39 0.42 0.45 0.48 0.52 0.55 0.58 0.61 0.65 0.68 0.71 0.74 0.77 0.81 0.84 0.87 0.90 0.94 0.97 1.00" />
+        <feFuncG type="discrete" tableValues="0.00 0.03 0.06 0.10 0.13 0.16 0.19 0.23 0.26 0.29 0.32 0.35 0.39 0.42 0.45 0.48 0.52 0.55 0.58 0.61 0.65 0.68 0.71 0.74 0.77 0.81 0.84 0.87 0.90 0.94 0.97 1.00" />
+        <feFuncB type="discrete" tableValues="0.00 0.03 0.06 0.10 0.13 0.16 0.19 0.23 0.26 0.29 0.32 0.35 0.39 0.42 0.45 0.48 0.52 0.55 0.58 0.61 0.65 0.68 0.71 0.74 0.77 0.81 0.84 0.87 0.90 0.94 0.97 1.00" />
+      </feComponentTransfer>
+
+      {/* 3. Saturation Boost (Proper HSL-based saturation) */}
+      <feColorMatrix in="poster" type="matrix" values="1.52575 -0.44025 -0.0855 0 0  -0.22425 1.30975 -0.0855 0 0  -0.22425 -0.44025 1.6645 0 0  0 0 0 1 0" result="vibrant" />
+      
+      {/* 4. Brightness/Contrast */}
+      <feComponentTransfer in="vibrant" result="shiny">
+        <feFuncR type="linear" slope="1.25" intercept="0.05" />
+        <feFuncG type="linear" slope="1.25" intercept="0.05" />
+        <feFuncB type="linear" slope="1.25" intercept="0.05" />
+      </feComponentTransfer>
+
+      {/* 5. Edge Detection (Ink Weight affects divisor for stronger edges) */}
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="edgeBlur" />
+      <feColorMatrix in="edgeBlur" type="luminanceToAlpha" result="lum" />
+      <feConvolveMatrix in="lum" order="3 3" kernelMatrix="0 1 0 1 -4 1 0 1 0" divisor="0.8" result="edgesRaw" />
+      <feGaussianBlur in="edgesRaw" stdDeviation="0.2" result="edgesSoft" />
+
+      {/* 6. Ink Lines (Primary outlines) */}
+      <feFlood flood-color="#1a0a2e" flood-opacity="1" result="ink" />
+      <feComposite in="ink" in2="edgesSoft" operator="in" result="outlines" />
+
+      {/* 7. Stronger Detail Lines (Secondary outlines - affected by Ink Weight) */}
+      <feConvolveMatrix in="lum" order="3 3" kernelMatrix="1 1 1 1 -8 1 1 1 1" divisor="1.2000000000000002" result="edgesStrong" />
+      <feGaussianBlur in="edgesStrong" stdDeviation="0.2" result="edgesStrongSoft" />
+      <feFlood flood-color="#000000" flood-opacity="0.8" result="inkStrong" />
+      <feComposite in="inkStrong" in2="edgesStrongSoft" operator="in" result="outlinesStrong" />
+
+      {/* 8. Merge Layers */}
+      <feMerge>
+        <feMergeNode in="shiny" />
+        <feMergeNode in="outlines" />
+        <feMergeNode in="outlinesStrong" />
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+
         {baseImage && (
-          <img 
+          <img
             id="canvas-base-image"
-            src={baseImage} 
-            alt="Background" 
+            src={baseImage}
+            alt="Background"
             className="w-full h-full object-contain pointer-events-none animate-grain-reveal"
           />
         )}
@@ -492,6 +573,10 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         .filter-ink {
             filter: grayscale(100%) contrast(150%) brightness(0.8) opacity(0.85);
+        }
+
+        .filter-manga {
+            filter: url(#manga-filter);
         }
       `}</style>
     </div>

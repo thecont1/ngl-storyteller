@@ -43,17 +43,13 @@ export const GeminiIcon = ({ spinning = true }: { spinning?: boolean }) => (
     <defs>
       <linearGradient id="geminiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#4285f4" />
-        <stop offset="25%" stopColor="#34a853" />
-        <stop offset="50%" stopColor="#fbbc05" />
-        <stop offset="75%" stopColor="#ea4335" />
-        <stop offset="100%" stopColor="#4285f4" />
+        <stop offset="50%" stopColor="#8ab4f8" />
+        <stop offset="100%" stopColor="#1967d2" />
       </linearGradient>
       <linearGradient id="geminiFill" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#4285f4" stopOpacity="0.2" />
-        <stop offset="25%" stopColor="#34a853" stopOpacity="0.2" />
-        <stop offset="50%" stopColor="#fbbc05" stopOpacity="0.2" />
-        <stop offset="75%" stopColor="#ea4335" stopOpacity="0.2" />
-        <stop offset="100%" stopColor="#4285f4" stopOpacity="0.2" />
+        <stop offset="50%" stopColor="#8ab4f8" stopOpacity="0.2" />
+        <stop offset="100%" stopColor="#1967d2" stopOpacity="0.2" />
       </linearGradient>
       <style>{`
         @keyframes spin {
