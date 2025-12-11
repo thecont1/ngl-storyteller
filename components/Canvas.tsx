@@ -11,6 +11,8 @@ interface CanvasProps {
   onRemoveItem: (id: string) => void;
   onDimensionsLoaded: (width: number, height: number) => void;
   exportRef: React.MutableRefObject<HTMLDivElement | null>;
+  hasBorder?: boolean;
+  caption?: string;
 }
 
 interface InitialItemState {
@@ -146,7 +148,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   
   onUpdateItem,
   onDimensionsLoaded,
-  exportRef
+  exportRef,
+  hasBorder = false,
+  caption
 }) => {
   const [dragMode, setDragMode] = useState<DragMode>(DragMode.NONE);
   const [startPos, setStartPos] = useState<Position>({ x: 0, y: 0 });
@@ -304,33 +308,48 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   // Dimensions for the style attribute
-  const canvasStyle = baseDimensions 
+  const borderTop = hasBorder ? '30px' : '0px';
+  const borderSide = hasBorder ? '30px' : '0px';
+  const borderBottom = hasBorder ? (caption ? '160px' : '30px') : '0px';
+
+  const canvasStyle = baseDimensions
     ? {
         width: baseDimensions.width,
         height: baseDimensions.height,
         // Center with absolute positioning and scale
         transform: `translate(-50%, -50%) scale(${scale})`,
-        transformOrigin: 'center center'
+        transformOrigin: 'center center',
+        borderTop: `${borderTop} solid white`,
+        borderLeft: `${borderSide} solid white`,
+        borderRight: `${borderSide} solid white`,
+        borderBottom: `${borderBottom} solid white`,
+        boxSizing: 'content-box' as const // Ensure border expands outwards
       }
     : {
         width: '800px',
         height: '600px',
         transform: `translate(-50%, -50%) scale(${scale})`,
-        transformOrigin: 'center center'
+        transformOrigin: 'center center',
+        borderTop: `${borderTop} solid white`,
+        borderLeft: `${borderSide} solid white`,
+        borderRight: `${borderSide} solid white`,
+        borderBottom: `${borderBottom} solid white`,
+        boxSizing: 'content-box' as const
       };
 
   return (
-    <div 
+    <div
       className="w-full h-full bg-dot-grid relative overflow-hidden select-none"
       onClick={handleBackgroundClick}
       ref={containerRef}
     >
-      <div 
+      <div
         ref={exportRef}
         id="canvas-export-div"
-        className="absolute top-1/2 left-1/2 shadow-2xl bg-black transition-transform duration-200 ease-out overflow-hidden"
+        className="absolute top-1/2 left-1/2 shadow-2xl bg-black transition-transform duration-200 ease-out"
         style={canvasStyle}
       >
+        <div className="w-full h-full relative overflow-hidden">
         {/* SVG Filters Definition */}
 <svg width="0" height="0">
   <defs>
@@ -413,7 +432,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             }}
             onMouseDown={(e) => handleMouseDown(e, item, DragMode.DRAG)}
           >
-            <div className={`w-full h-full relative`} style={{ 
+            <div className={`w-full h-full relative overflow-hidden`} style={{
                 clipPath: `inset(${item.crop.top}% ${item.crop.right}% ${item.crop.bottom}% ${item.crop.left}%)`,
                 transition: 'clip-path 0.1s ease-out'
             }}>
@@ -522,6 +541,25 @@ export const Canvas: React.FC<CanvasProps> = ({
           </div>
         )})}
       </div>
+      </div>
+
+      {/* Caption Display */}
+      {hasBorder && caption && (
+          <div
+            className="absolute bottom-[-160px] left-0 w-full h-[160px] flex flex-col items-center justify-center px-8 text-center canvas-caption pointer-events-none bg-white"
+            style={{
+                borderLeft: '30px solid white',
+                borderRight: '30px solid white',
+                borderBottom: '30px solid white',
+                boxSizing: 'border-box',
+                zIndex: 50 // Ensure it's on top
+            }}
+          >
+              <p className="text-black font-['Chewy'] text-3xl leading-tight tracking-wide mb-4">
+                  {caption}
+              </p>
+          </div>
+      )}
       
       <style>{`
         @keyframes progress-real {
