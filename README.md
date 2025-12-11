@@ -131,9 +131,9 @@ Built with:
 - Modern web technologies for interactive presentations
 - René Magritte collection on WikiArt Visual Art Encyclopedia
 
-## 📄 License
+## 🍏 License
 
-This project is open source and available under the MIT License.
+This project is open source and available under the Creative Commons Attribution 4.0 International License (CC BY 4.0).
 
 ## 🍏 Acknowledgments
 
