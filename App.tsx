@@ -591,6 +591,7 @@ const App: React.FC = () => {
     { id: 'ghost', label: 'Ghost' },
     { id: 'ink', label: 'Ink' },
     { id: 'pumpkin', label: 'Pumpkin' },
+    { id: 'manga', label: 'Manga' },
   ];
 
   const selectedItem = state.items.find(i => i.id === state.selectedItemId);
