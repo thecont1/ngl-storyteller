@@ -190,8 +190,18 @@ export const Canvas: React.FC<CanvasProps> = ({
         const availW = containerW - padding;
         const availH = containerH - padding;
 
-        const scaleW = availW / baseDimensions.width;
-        const scaleH = availH / baseDimensions.height;
+        // Calculate total dimensions including borders
+        let totalW = baseDimensions.width;
+        let totalH = baseDimensions.height;
+
+        if (hasBorder) {
+            totalW += 60; // 30px left + 30px right
+            totalH += 30; // 30px top
+            totalH += caption ? 160 : 30; // 160px or 30px bottom
+        }
+
+        const scaleW = availW / totalW;
+        const scaleH = availH / totalH;
 
         // "Fit inside" logic
         setScale(Math.min(scaleW, scaleH));
@@ -202,7 +212,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     updateScale(); // Initial call
 
     return () => observer.disconnect();
-  }, [baseDimensions]);
+  }, [baseDimensions, hasBorder, caption]);
 
   const handleBackgroundClick = (e: React.MouseEvent) => {
     if (e.target === containerRef.current || e.target === exportRef.current) {
@@ -308,21 +318,22 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   // Dimensions for the style attribute
-  const borderTop = hasBorder ? '30px' : '0px';
-  const borderSide = hasBorder ? '30px' : '0px';
-  const borderBottom = hasBorder ? (caption ? '160px' : '30px') : '0px';
+  const borderTopVal = hasBorder ? 30 : 0;
+  const borderSideVal = hasBorder ? 30 : 0;
+  const borderBottomVal = hasBorder ? (caption ? 160 : 30) : 0;
 
   const canvasStyle = baseDimensions
     ? {
         width: baseDimensions.width,
         height: baseDimensions.height,
         // Center with absolute positioning and scale
+        // transform-origin: center center aligns the center of the BORDER BOX with the pivot
         transform: `translate(-50%, -50%) scale(${scale})`,
         transformOrigin: 'center center',
-        borderTop: `${borderTop} solid white`,
-        borderLeft: `${borderSide} solid white`,
-        borderRight: `${borderSide} solid white`,
-        borderBottom: `${borderBottom} solid white`,
+        borderTop: `${borderTopVal}px solid white`,
+        borderLeft: `${borderSideVal}px solid white`,
+        borderRight: `${borderSideVal}px solid white`,
+        borderBottom: `${borderBottomVal}px solid white`,
         boxSizing: 'content-box' as const // Ensure border expands outwards
       }
     : {
@@ -330,10 +341,10 @@ export const Canvas: React.FC<CanvasProps> = ({
         height: '600px',
         transform: `translate(-50%, -50%) scale(${scale})`,
         transformOrigin: 'center center',
-        borderTop: `${borderTop} solid white`,
-        borderLeft: `${borderSide} solid white`,
-        borderRight: `${borderSide} solid white`,
-        borderBottom: `${borderBottom} solid white`,
+        borderTop: `${borderTopVal}px solid white`,
+        borderLeft: `${borderSideVal}px solid white`,
+        borderRight: `${borderSideVal}px solid white`,
+        borderBottom: `${borderBottomVal}px solid white`,
         boxSizing: 'content-box' as const
       };
 
@@ -541,25 +552,27 @@ export const Canvas: React.FC<CanvasProps> = ({
           </div>
         )})}
       </div>
-      </div>
 
       {/* Caption Display */}
       {hasBorder && caption && (
           <div
-            className="absolute bottom-[-160px] left-0 w-full h-[160px] flex flex-col items-center justify-center px-8 text-center canvas-caption pointer-events-none bg-white"
+            className="absolute flex flex-col items-center justify-center px-8 text-center canvas-caption pointer-events-none"
             style={{
-                borderLeft: '30px solid white',
-                borderRight: '30px solid white',
-                borderBottom: '30px solid white',
-                boxSizing: 'border-box',
-                zIndex: 50 // Ensure it's on top
+                top: '100%',
+                left: '-30px',
+                width: 'calc(100% + 60px)',
+                height: '160px',
+                zIndex: 50,
+                backgroundColor: 'white',
+                color: 'black'
             }}
           >
-              <p className="text-black font-['Chewy'] text-3xl leading-tight tracking-wide mb-4">
+              <p className="text-black font-['Chewy'] text-5xl leading-tight tracking-wide font-bold">
                   {caption}
               </p>
           </div>
       )}
+      </div>
       
       <style>{`
         @keyframes progress-real {

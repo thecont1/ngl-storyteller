@@ -332,13 +332,18 @@ const App: React.FC = () => {
                         clonedExportDiv.style.position = 'static';
                         clonedExportDiv.style.left = 'auto';
                         clonedExportDiv.style.top = 'auto';
+                        clonedExportDiv.style.overflow = 'visible';
                         
                         // Ensure caption is visible in export if it exists
                         const captionEl = clonedExportDiv.querySelector('.canvas-caption');
                         if (captionEl) {
                             (captionEl as HTMLElement).style.display = 'flex';
-                            // Force white background on export
                             (captionEl as HTMLElement).style.backgroundColor = 'white';
+                            // Reset positioning for static layout capture
+                            (captionEl as HTMLElement).style.position = 'relative';
+                            (captionEl as HTMLElement).style.top = 'auto';
+                            (captionEl as HTMLElement).style.left = 'auto';
+                            (captionEl as HTMLElement).style.width = '100%';
                         }
 
                         // FIX: Remove animation grain/dimness from base image during export
@@ -516,7 +521,7 @@ const App: React.FC = () => {
         try {
             if(!exportContainerRef.current) return;
             
-            // 1. Capture Canvas cleanly
+            // 1. Capture Canvas cleanly (without borders and caption for Magritte)
             const canvas = await html2canvas(exportContainerRef.current, {
                 useCORS: true,
                 backgroundColor: null,
@@ -529,12 +534,17 @@ const App: React.FC = () => {
                         clonedExportDiv.style.left = 'auto';
                         clonedExportDiv.style.top = 'auto';
                         
-                        // Ensure caption is visible in export if it exists
+                        // Remove borders for Magritte export
+                        clonedExportDiv.style.border = 'none';
+                        clonedExportDiv.style.borderTop = 'none';
+                        clonedExportDiv.style.borderBottom = 'none';
+                        clonedExportDiv.style.borderLeft = 'none';
+                        clonedExportDiv.style.borderRight = 'none';
+                        
+                        // Hide caption for Magritte export
                         const captionEl = clonedExportDiv.querySelector('.canvas-caption');
                         if (captionEl) {
-                            (captionEl as HTMLElement).style.display = 'flex';
-                            // Force white background on export
-                            (captionEl as HTMLElement).style.backgroundColor = 'white';
+                            (captionEl as HTMLElement).style.display = 'none';
                         }
 
                         const baseImg = clonedExportDiv.querySelector('#canvas-base-image');
